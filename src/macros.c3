@@ -102,7 +102,11 @@ macro print_short_about($Cmd) @private {
 macro @print_required_args($Cmd) @private {
   $foreach $member : $Cmd.membersof :
     $if !$member.has_tagof("seali:default") &&& !($member.has_tagof("seali:skip") &&& $member.tagof("seali:skip")) &&& !@is_maybe_type($member.type):
-      io::print(@sprintf(" %s <%s>", @get_name($member), $member.nameof.@to_upper()));
+      var $name = @get_name($member);
+      $if $name.len > 0:
+        io::print(" " +++ $name);
+      $endif
+      io::print(@sprintf(" <%s>", $member.nameof.@to_upper()));
     $endif
   $endforeach
 }
@@ -113,28 +117,35 @@ macro @get_name($member) @private {
       return @sprintf("--%s", $typeof($member.tagof("seali:long")) == bool ??? $member.nameof : $member.tagof("seali:long"));
     $case $member.has_tagof("seali:short"):
       return "-" +++ $typeof($member.tagof("seali:short")) == bool ??? $member.nameof[0..0] : $member.tagof("seali:short");
+    $default:
+      return "";
   $endswitch
 }
 
 macro @print_all_args($Cmd) @private {
   var $max_len = 0;
   $foreach $member : $Cmd.membersof :
-    var $member_len = @get_all_names($member).len + @arg_value_to_string($member).len + 2; // 2 spaces
-    $if $member_len > $max_len:
-      $max_len = $member_len;
+    var $all_names = @get_all_names($member);
+    $if $all_names.len > 0:
+      var $member_len = $all_names.len + @arg_value_to_string($member).len + 2; // 2 spaces
+      $if $member_len > $max_len:
+        $max_len = $member_len;
+      $endif
     $endif
   $endforeach
 
   $foreach $member : $Cmd.membersof :
     var $all_names = @get_all_names($member);
-    var $arg_value = @arg_value_to_string($member);
-    io::print(@sprintf(" %s", $all_names));
-    io::print(@sprintf(" %s", $arg_value));
-    $for var $i = $all_names.len + $arg_value.len + 2; $i < $max_len; $i++:
-      io::print(" ");
-    $endfor
-    @print_arg_desc($member);
-    io::printn();
+    $if $all_names.len > 0:
+      var $arg_value = @arg_value_to_string($member);
+      io::print(@sprintf(" %s", $all_names));
+      io::print(@sprintf(" %s", $arg_value));
+      $for var $i = $all_names.len + $arg_value.len + 2; $i < $max_len; $i++:
+        io::print(" ");
+      $endfor
+      @print_arg_desc($member);
+      io::printn();
+    $endif
   $endforeach
 }
 
