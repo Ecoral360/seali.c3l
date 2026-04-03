@@ -1,4 +1,4 @@
-# seali.c3l
+# seali 🌊
 
 A lightweight CLI library for C3 that makes writing command-line interfaces simple and declarative using macros and attributes.
 
