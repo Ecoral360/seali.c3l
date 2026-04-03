@@ -13,7 +13,9 @@ struct Cli @Command("myapp")
 
 
 fn int main(String[] args) {
-  Cli cli = seali::parse(Cli, args);
+  Cli cli = seali::parse(Cli, args)!!;
+
+  io::printfn("%s\n", string::from_struct(mem, cli));
 
 	return 0;
 }

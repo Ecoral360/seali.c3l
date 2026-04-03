@@ -1,6 +1,7 @@
 module seali;
 import libc;
 import std::io;
+import std::collections::list;
 
 struct CommandConfig {
   String name;
@@ -53,22 +54,111 @@ attrdef @Skip = @tag("seali:skip", true);
 attrdef @Help(String value) = @tag("seali:help", value);
 
 
+macro parse($Cmd, String[] _args) {
+  var args = _args[1..];
 
-struct Cli2 @Command("demo") @RenameAll(PASCAL_CASE)
-{
-  String name @Short @Long;
-
-  uint count @Short @Long @Default(1) @Help("The number of times to greet");
-}
-
-macro parse($Cmd, String[] args) {
   foreach (arg: args) {
     if (arg == "--help") print_long_about($Cmd);
     if (arg == "-h") print_short_about($Cmd);
   }
 
-  return ($Cmd) {};
+  List{String} args_with_values;
+  args_with_values.init(mem);
+  defer args_with_values.free();
+
+  $Cmd cmd;
+
+  // set the default value of all the field that have one
+  $foreach $member : $Cmd.membersof:
+    $if $member.has_tagof("seali:default"):
+      args_with_values.push($member.nameof);
+      cmd.$eval($member.nameof) = $member.tagof("seali:default") ;
+    $endif
+    $if @is_maybe_type($member.type):
+      args_with_values.push($member.nameof);
+    $endif
+  $endforeach
+
+  int i = 0;
+  while (i < args.len) {
+    $foreach $member : $Cmd.membersof:
+      if (@arg_name_matches($member, args[i])) {
+        args_with_values.push($member.nameof);
+        i++;
+        i += @arg_set_value(cmd, $member, args, i)!;
+        continue;
+      }
+    $endforeach
+
+    io::eprintfn("Unknown option '%s'\n", args[i]);
+    libc::exit(-1);
+  }
+
+  var has_missing = false;
+  // check that each field has been initialized
+  $foreach $member : $Cmd.membersof:
+    if (!args_with_values.contains($member.nameof)) {
+      if (!has_missing) {
+        io::eprint("Missing required option ");
+      } else {
+        io::eprint(", ");
+      }
+      io::eprint(@get_name($member));
+      has_missing = true;
+    }
+  $endforeach
+
+  if (has_missing) {
+    io::eprintn();
+    libc::exit(-1);
+  }
+
+  return cmd;
 }
+
+macro bool @arg_name_matches($arg, value) {
+  $if $arg.has_tagof("seali:short"):
+    if (value == 
+        ("-" +++ ($typeof($arg.tagof("seali:short")) == bool ??? $arg.nameof[0..0] : $arg.tagof("seali:short")))) {
+      return true;
+    }
+  $endif
+
+  $if $arg.has_tagof("seali:long"):
+    if (value == @sprintf("--%s", $typeof($arg.tagof("seali:long")) == bool ??? $arg.nameof : $arg.tagof("seali:long"))) {
+      return true;
+    }
+  $endif
+
+  return false;
+}
+
+// returns the number of consummed values
+macro int? @arg_set_value(#cmd, $arg, args, i) {
+  $switch:
+    $case $arg.type == bool:
+      #cmd.$eval($arg.nameof) = true;
+      return 0;
+
+    $case $arg.type == int:
+      String arg = args[i];
+      #cmd.$eval($arg.nameof) = arg.to_int()!;
+      return 1;
+
+    $case $arg.type == uint:
+      String arg = args[i];
+      #cmd.$eval($arg.nameof) = arg.to_uint()!;
+      return 1;
+
+    $case $arg.type == String:
+      #cmd.$eval($arg.nameof) = args[i];
+      return 1;
+
+    $default:
+      $error "Unsupported type arg";
+  $endswitch
+}
+
 
 macro print_long_about($Cmd) @private {
   $if !$Cmd.has_tagof("seali:cmd_name"):
@@ -116,7 +206,7 @@ macro @get_name($member) @private {
     $case $member.has_tagof("seali:long"):
       return @sprintf("--%s", $typeof($member.tagof("seali:long")) == bool ??? $member.nameof : $member.tagof("seali:long"));
     $case $member.has_tagof("seali:short"):
-      return "-" +++ $typeof($member.tagof("seali:short")) == bool ??? $member.nameof[0..0] : $member.tagof("seali:short");
+      return "-" +++ ($typeof($member.tagof("seali:short")) == bool ??? $member.nameof[0..0] : $member.tagof("seali:short"));
     $default:
       return "";
   $endswitch
@@ -186,20 +276,6 @@ macro @get_all_names($member) @private {
   return $result;
 }
 
-macro @print_arg_help($Cmd) @private {
-  libc::exit(0);
-}
-
-macro parse_cmd() @private {
-  var $allowed_tags = { "cmd_name", "version", "about", "long_about", "rename_all" };
-}
-
-macro parse_arg() @private {
-  var $allowed_tags = { "short", "long", "default", "help" };
-}
-
-
-
 macro @is_maybe($value) {
   return ($defined($value.get) &&& $defined($value.get()) &&& 
           ($defined($value.get()!) ||| $defined($value == maybe::value{$typeof($value.value)}($value.value))));
@@ -212,6 +288,15 @@ macro @is_maybe_type($Type) {
 }
 
 
+
+macro parse_cmd() @private {
+  var $allowed_tags = { "cmd_name", "version", "about", "long_about", "rename_all" };
+}
+
+macro parse_arg($member, String[] args) @private {
+  var $allowed_tags = { "short", "long", "default", "help" };
+
+}
 
 
 
