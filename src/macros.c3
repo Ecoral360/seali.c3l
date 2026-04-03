@@ -43,7 +43,7 @@ struct ArgConfig {
 attrdef @ShortName(char value) = @tag("seali:short", value);
 attrdef @Short = @tag("seali:short", true);
 
-attrdef @LongName(char value) = @tag("seali:long", value);
+attrdef @LongName(String value) = @tag("seali:long", value);
 attrdef @Long = @tag("seali:long", true);
 
 attrdef @Default(value) = @tag("seali:default", value);
@@ -110,9 +110,9 @@ macro @print_required_args($Cmd) @private {
 macro @get_name($member) @private {
   $switch:
     $case $member.has_tagof("seali:long"):
-      return @sprintf("--%s", $member.tagof("seali:long") == true ??? $member.nameof : $member.tagof("seali:long"));
+      return @sprintf("--%s", $typeof($member.tagof("seali:long")) == bool ??? $member.nameof : $member.tagof("seali:long"));
     $case $member.has_tagof("seali:short"):
-      return @sprintf("-%c", $member.tagof("seali:short") == true ??? $member.nameof[0] : $member.tagof("seali:short"));
+      return "-" +++ $typeof($member.tagof("seali:short")) == bool ??? $member.nameof[0..0] : $member.tagof("seali:short");
   $endswitch
 }
 
@@ -161,14 +161,15 @@ macro @print_arg_desc($arg) {
 macro @get_all_names($member) @private {
   var $result = "";
   $if $member.has_tagof("seali:short"):
-    $result +++= @sprintf("-%s", $member.tagof("seali:short") == true ??? $member.nameof[0..0] : (String){$member.tagof("seali:short")});
+    $result +++= "-";
+    $result +++= $typeof($member.tagof("seali:short")) == bool ??? $member.nameof[0..0] : $member.tagof("seali:short");
   $endif
 
   $if $member.has_tagof("seali:long"):
     $if $result.len > 0:
       $result +++= ", ";
     $endif
-    $result +++= @sprintf("--%s", $member.tagof("seali:long") == true ??? $member.nameof : $member.tagof("seali:long"));
+    $result +++= @sprintf("--%s", $typeof($member.tagof("seali:long")) == bool ??? $member.nameof : $member.tagof("seali:long"));
   $endif
 
   return $result;

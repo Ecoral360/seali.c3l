@@ -2,12 +2,14 @@ module seali;
 
 import std::io;
 
-struct Cli @Command("demo") 
-  @About("Simple program to greet a person")
-  @RenameAll(PASCAL_CASE)
+struct Cli @Command("myapp") 
+  @About("My awesome CLI application")
+  @RenameAll(KEBAB_CASE)
 {
-  String name @Short @Long @Help("Your name");
-  uint count @Short @Long @Default(1) @Help("The number of times to greet");
+  String input_file @Short @Long @Help("Input file path");
+  bool verbose @ShortName('v') @Long @Default(false) @Help("Enable verbose output");
+  String output @Short @LongName("output") @Help("Output file");
+  uint threads @Short @Default(4) @Help("Number of threads");
 }
 
 
