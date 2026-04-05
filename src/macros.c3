@@ -245,7 +245,7 @@ macro @print_required_args($Cmd) @private {
   $foreach $member : $Cmd.membersof :
     $if $member.has_tagof("seali:arg"):
       ArgConfig $config = @setup_config($member);
-      $if $config.default_value.len == 0:
+      $if $config.default_value.len == 0 &&& !@is_maybe_type($member.type):
         var $name = @get_name($config);
         $if $name.len > 0:
           io::print(" " +++ $name);
@@ -272,11 +272,13 @@ macro @print_all_args($Cmd) @private {
   $foreach $member : $Cmd.membersof :
     $if $member.has_tagof("seali:arg"):
       ArgConfig $config = @setup_config($member);
-      var $all_names = @get_all_names($config);
-      $if $all_names.len > 0:
-        var $member_len = $all_names.len + @arg_value_to_string($member).len + 2; // 2 spaces
-        $if $member_len > $max_len:
-          $max_len = $member_len;
+      $if $config.default_value.len != 0 ||| @is_maybe_type($member.type):
+        var $all_names = @get_all_names($config);
+        $if $all_names.len > 0:
+          var $member_len = $all_names.len + @arg_value_to_string($member).len + 2; // 2 spaces
+          $if $member_len > $max_len:
+            $max_len = $member_len;
+          $endif
         $endif
       $endif
     $endif
@@ -285,16 +287,18 @@ macro @print_all_args($Cmd) @private {
   $foreach $member : $Cmd.membersof :
     $if $member.has_tagof("seali:arg"):
       ArgConfig $config = @setup_config($member);
-      var $all_names = @get_all_names($config);
-      $if $all_names.len > 0:
-        var $arg_value = @arg_value_to_string($member);
-        io::print(@sprintf(" %s", $all_names));
-        io::print(@sprintf(" %s", $arg_value));
-        $for var $i = $all_names.len + $arg_value.len + 2; $i < $max_len; $i++:
-          io::print(" ");
-        $endfor
-        @print_arg_desc($config);
-        io::printn();
+      $if $config.default_value.len != 0 ||| @is_maybe_type($member.type):
+        var $all_names = @get_all_names($config);
+        $if $all_names.len > 0:
+          var $arg_value = @arg_value_to_string($member);
+          io::print(@sprintf(" %s", $all_names));
+          io::print(@sprintf(" %s", $arg_value));
+          $for var $i = $all_names.len + $arg_value.len + 2; $i < $max_len; $i++:
+            io::print(" ");
+          $endfor
+          @print_arg_desc($config);
+          io::printn();
+        $endif
       $endif
     $endif
   $endforeach
