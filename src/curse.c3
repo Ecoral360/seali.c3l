@@ -61,6 +61,8 @@ macro ArgConfig @arg(...) @builtin {
 
   String $default_value;
 
+  bool $is_subcommand;
+
   $for var $i = 0; $i < $vacount; $i++ :
     var $s = $stringify($vaexpr[$i]);
     $switch:
@@ -105,6 +107,14 @@ macro ArgConfig @arg(...) @builtin {
           $help = $val[1..^2];
         $endif
 
+      $case @starts_with($s, "subcommand"):
+        var $val = @get_val($s);
+        $if $typeof($val) == bool &&& $val == true:
+          $is_subcommand = true;
+        $else
+          $error "`subcommand` doesn't take an argument";
+        $endif
+
       $default:
         $error "Unknown attribute '" +++ $s +++ "'";
     $endswitch
@@ -119,5 +129,7 @@ macro ArgConfig @arg(...) @builtin {
 
     .help = $help,
     .default_value = $default_value,
+
+    .is_subcommand = $is_subcommand,
   };
 }
