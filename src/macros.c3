@@ -380,7 +380,7 @@ macro @has_options_args($Cmd) @private {
   $foreach $member : $Cmd.membersof :
     $if $member.has_tagof("seali:arg"):
       ArgConfig $config = @setup_config($member);
-      $if $config.default_value.len > 0 ||| @is_maybe_type($member.type):
+      $if !$config.is_subcommand &&& ($config.default_value.len > 0 ||| @is_maybe_type($member.type)):
         return true;
       $endif
     $endif
@@ -419,7 +419,7 @@ macro @print_all_args($Cmd) @private {
   $foreach $member : $Cmd.membersof :
     $if $member.has_tagof("seali:arg"):
       ArgConfig $config = @setup_config($member);
-      $if $config.default_value.len != 0 ||| @is_maybe_type($member.type):
+      $if !$config.is_subcommand &&& ($config.default_value.len != 0 ||| @is_maybe_type($member.type)):
         var $all_names = @get_all_names($config);
         $if $all_names.len > 0:
           var $member_len = $all_names.len + @arg_value_to_string($member).len + 2; // 2 spaces
@@ -434,7 +434,7 @@ macro @print_all_args($Cmd) @private {
   $foreach $member : $Cmd.membersof :
     $if $member.has_tagof("seali:arg"):
       ArgConfig $config = @setup_config($member);
-      $if $config.default_value.len != 0 ||| @is_maybe_type($member.type):
+      $if !$config.is_subcommand &&& ($config.default_value.len != 0 ||| @is_maybe_type($member.type)):
         var $all_names = @get_all_names($config);
         $if $all_names.len > 0:
           var $arg_value = @arg_value_to_string($member);
