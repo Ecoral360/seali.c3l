@@ -31,6 +31,12 @@ fn int main(String[] args) {
   Cli cli = seali::parse(Cli, args)!!;
 
   io::printfn("%s\n", string::from_struct(mem, cli));
+  if (try cli.install.get()) {
+    io::printfn("%s\n", string::from_struct(mem, cli.install.value));
+  }
+  if (try cli.fetch.get()) {
+    io::printfn("%s\n", string::from_struct(mem, cli.fetch.value));
+  }
 
 	return 0;
 }

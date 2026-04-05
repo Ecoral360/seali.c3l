@@ -238,11 +238,7 @@ macro int? @arg_set_value(#cmd, $arg, $config, args, i) {
       return args.len;
 
     $default:
-      $if $config.@is_unamed():
-        return 1;
-      $else
-        return 2;
-      $endif
+      return 1;
   $endswitch
 
 }
