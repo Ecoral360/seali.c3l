@@ -1,0 +1,2 @@
+fn void test() @test {
+}

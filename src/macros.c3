@@ -1,5 +1,5 @@
 module seali;
-import libc;
+import std::os;
 import std::io;
 import std::collections::list;
 import std::collections::maybe;
@@ -317,10 +317,9 @@ macro print_long_about($Cmd) @private {
   $if @has_options_args($Cmd):
     io::printn("Options:");
     @print_all_args($Cmd);
+    io::printn();
   $endif
-
-  io::printn();
-  libc::exit(0);
+  os::exit(0);
 }
 
 macro print_short_about($Cmd) @private {
