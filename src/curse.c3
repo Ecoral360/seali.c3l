@@ -63,6 +63,8 @@ macro ArgConfig @arg(...) @builtin {
 
   bool $is_subcommand;
 
+  bool $skip;
+
   $for var $i = 0; $i < $vacount; $i++ :
     var $s = $stringify($vaexpr[$i]);
     $switch:
@@ -115,6 +117,14 @@ macro ArgConfig @arg(...) @builtin {
           $error "`subcommand` doesn't take an argument";
         $endif
 
+      $case @starts_with($s, "skip"):
+        var $val = @get_val($s);
+        $if $typeof($val) == bool &&& $val == true:
+          $skip = true;
+        $else
+          $error "`skip` doesn't take an argument";
+        $endif
+
       $default:
         $error "Unknown attribute '" +++ $s +++ "'";
     $endswitch
@@ -131,5 +141,7 @@ macro ArgConfig @arg(...) @builtin {
     .default_value = $default_value,
 
     .is_subcommand = $is_subcommand,
+
+    .skip = $skip,
   };
 }

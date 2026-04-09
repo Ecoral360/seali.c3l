@@ -40,6 +40,7 @@ struct ArgConfig {
   String long_help;
   String default_value;
   String env;
+  bool skip;
   bool is_subcommand;
 }
 
@@ -62,22 +63,24 @@ macro parse($Cmd, String[] _args) {
 
   // set the default value of all the field that have one
   $foreach $member : $Cmd.membersof:
-    ArgConfig $config = $member.has_tagof("seali:arg") ??? $member.tagof("seali:arg") : {};
-    $if $config.default_value.len > 0:
-      args_with_values.push($member.nameof);
-      do {
-        var val = @str_to_value($member.type, $config.default_value);
-        $if $defined(val!):
-          if (catch val) {
-            val!;
-            return cmd;
-          }
-        $endif
-        cmd.$eval($member.nameof) = val;
-      };
-    $endif
-    $if @is_maybe_type($member.type):
-      args_with_values.push($member.nameof);
+    ArgConfig $config = @setup_config($member);
+    $if !$config.skip:
+      $if $config.default_value.len > 0:
+        args_with_values.push($member.nameof);
+        do {
+          var val = @str_to_value($member.type, $config.default_value);
+          $if $defined(val!):
+            if (catch val) {
+              val!;
+              return cmd;
+            }
+          $endif
+          cmd.$eval($member.nameof) = val;
+        };
+      $endif
+      $if @is_maybe_type($member.type):
+        args_with_values.push($member.nameof);
+      $endif
     $endif
   $endforeach
 
@@ -89,18 +92,20 @@ macro parse($Cmd, String[] _args) {
   while (i < args.len) {
     $foreach $member : $Cmd.membersof:
       ArgConfig $config = @setup_config($member);
-      if (args[i] == "--help") print_long_about($Cmd);
-      if (args[i] == "-h") print_short_about($Cmd);
+      $if !$config.skip:
+        if (args[i] == "--help") print_long_about($Cmd);
+        if (args[i] == "-h") print_short_about($Cmd);
 
-      if (@arg_name_matches($config, $member, args[i]) && !got_value.contains($member.nameof)) {
-        args_with_values.push($member.nameof);
-        got_value.push($member.nameof);
-        $if !$config.@is_unamed():
-          i++;
-        $endif
-        i += @arg_set_value(cmd, $member, $config, args, i)!;
-        continue;
-      }
+        if (@arg_name_matches($config, $member, args[i]) && !got_value.contains($member.nameof)) {
+          args_with_values.push($member.nameof);
+          got_value.push($member.nameof);
+          $if !$config.@is_unamed():
+            i++;
+          $endif
+          i += @arg_set_value(cmd, $member, $config, args, i)!;
+          continue;
+        }
+      $endif
     $endforeach
 
     io::eprintfn("Unknown option '%s'\n", args[i]);
@@ -110,16 +115,18 @@ macro parse($Cmd, String[] _args) {
   var has_missing = false;
   // check that each field has been initialized
   $foreach $member : $Cmd.membersof:
-    if (!args_with_values.contains($member.nameof)) {
-      if (!has_missing) {
-        io::eprint("Missing required option ");
-      } else {
-        io::eprint(", ");
+    ArgConfig $config = @setup_config($member);
+    $if !$config.skip:
+      if (!args_with_values.contains($member.nameof)) {
+        if (!has_missing) {
+          io::eprint("Missing required option ");
+        } else {
+          io::eprint(", ");
+        }
+        io::eprint(@get_name($config));
+        has_missing = true;
       }
-      ArgConfig $config = @setup_config($member);
-      io::eprint(@get_name($config));
-      has_missing = true;
-    }
+    $endif
   $endforeach
 
   if (has_missing) {
