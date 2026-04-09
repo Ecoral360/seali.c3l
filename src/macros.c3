@@ -51,9 +51,9 @@ macro ArgConfig.@is_unamed($self) {
 macro parse($Cmd, String[] _args) {
   var args = _args[1..];
 
-  if (args.len == 0) {
-    print_long_about($Cmd);
-  }
+  // if (args.len == 0) {
+  //   print_long_about($Cmd);
+  // }
 
   List{String} args_with_values;
   args_with_values.init(mem);
