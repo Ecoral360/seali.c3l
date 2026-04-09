@@ -137,9 +137,6 @@ macro parse($Cmd, String[] _args) {
   return cmd;
 }
 
-<*
-  @require $arg.has_tagof("seali:arg")
-*>
 macro ArgConfig @setup_config($arg) {
   ArgConfig $current_config = $arg.has_tagof("seali:arg") ??? $arg.tagof("seali:arg") : {};
 
