@@ -315,7 +315,7 @@ macro print_long_about($Cmd) @private {
     io::printn("\n");
     io::printn("Commands:");
     @print_subcommands($Cmd);
-    io::printn();
+    io::printn("\n");
   $else
     io::printn("\n");
   $endif
@@ -391,6 +391,10 @@ macro @print_required_args($Cmd) @private {
         io::print(" " +++ $name);
       $endif
       io::print(@sprintf(" <%s>", $member.nameof.@to_upper()));
+    $else
+      $if $config.@is_unamed():
+        io::print(@sprintf(" [<%s>]", $member.nameof.@to_upper()));
+      $endif
     $endif
   $endforeach
 }
