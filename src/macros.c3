@@ -123,7 +123,12 @@ macro parse($Cmd, String[] _args) {
         } else {
           io::eprint(", ");
         }
-        io::eprint(@get_name($config));
+        var $name = @get_name($config);
+        $if $name.len == 0:
+          io::eprint(@sprintf("<%s>", $member.nameof.@to_upper()));
+        $else
+          io::eprint($name);
+        $endif
         has_missing = true;
       }
     $endif

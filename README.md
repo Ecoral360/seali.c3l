@@ -1,33 +1,31 @@
-# seali 🌊
+# seali
 
 A lightweight CLI library for C3 that makes writing command-line interfaces simple and declarative using macros and attributes.
 
 ## Features
 
 - **Declarative CLI definition** - Define your CLI using structs and attributes
-- **Automatic help generation** - Built-in support for `-h`, `--help` with formatted output
-- **Case conversion** - Automatically convert field names to different conventions (kebab-case, camelCase, PascalCase, snake_case, SCREAMING_SNAKE_CASE)
-- **Default values** - Support for default values on arguments
+- **Automatic help generation** - Built-in `-h`/`--help` with formatted output
 - **Short and long flags** - Support for both `-f` and `--flag` style arguments
-- **Environment variable support** - Read values from environment variables
+- **Default values** - Optional arguments with fallback values
+- **Optional arguments** - Use `Maybe{T}` for arguments that may not be provided
+- **Subcommands** - Nest command structs for multi-command CLIs
+- **Positional arguments** - Fields without a flag name are matched positionally
 
 ## Installation
 
-### Using [c3l](https://github.com/konimarti/c3l) :
+### Using [c3l](https://github.com/konimarti/c3l):
 
-Run
 ```sh
 c3l fetch https://github.com/Ecoral360/seali.c3l
 ```
 
-
 ### Manually
-Get started with `seali`: 
-1. Make sure you have the [C3 compiler installed](https://github.com/c3lang/c3c)
+
+1. Make sure you have the [C3 compiler installed](https://github.com/c3lang/c3)
 2. Run `c3c init <YOUR_PROJECT>`
-4. Clone the this repository into `<YOUR_PROJECT>/lib/seali.c3l`
-5. Add `"dependencies": ["seali"]` to your `project.json`
-6. You are done !
+3. Clone this repository into `<YOUR_PROJECT>/lib/seali.c3l`
+4. Add `"dependencies": ["seali"]` to your `project.json`
 
 ## Quick Start
 
@@ -37,28 +35,26 @@ module myapp;
 import std::io;
 import seali;
 
-struct Cli @Command("greet") 
+struct Cli @Command("greet")
   @About("Simple program to greet a person")
-  @RenameAll(KEBAB_CASE)
 {
-  String name @Short @Long @Help("Your name");
-  uint count @Short @Long @Default(1) @Help("Number of times to greet");
+  String name     @Seali(@arg(short, long, help = "Your name"));
+  uint   count    @Seali(@arg(short, long, default_value = 1, help = "Number of times to greet"));
 }
 
 fn int main(String[] args) {
   Cli cli = seali::parse(Cli, args);
-  
+
   for (uint i = 0; i < cli.count; i++) {
     io::printfn("Hello, %s!", cli.name);
   }
-  
+
   return 0;
 }
 ```
 
-Run with:
 ```bash
-./build/seali greet --name World
+./build/myapp --name World
 # Output: Hello, World!
 ```
 
@@ -69,111 +65,147 @@ Run with:
 | Attribute | Description | Example |
 |-----------|-------------|---------|
 | `@Command(String)` | Marks a struct as a CLI command | `@Command("myapp")` |
-| `@About(String)` | Short description | `@About("My CLI app")` |
-| `@LongAbout(String)` | Long description | `@LongAbout("A longer description...")` |
-| `@RenameAll(CaseConvention)` | Convert field names | `@RenameAll(KEBAB_CASE)` |
+| `@About(String)` | Short description shown in help | `@About("My CLI app")` |
+| `@LongAbout(String)` | Long description shown in help | `@LongAbout("A longer description...")` |
 
-### Case Conventions
+### Field-Level Attribute: `@Seali(@arg(...))`
 
-- `KEBAB_CASE` → `my-field`
-- `CAMEL_CASE` → `myField`
-- `PASCAL_CASE` → `MyField`
-- `SNAKE_CASE` → `my_field`
-- `SCREAMING_SNAKE_CASE` → `MY_FIELD`
-- `LOWER_CASE` → `myfield`
-- `UPPER_CASE` → `MYFIELD`
-- `VERBATIM` → Use as-is
+All field configuration goes through the `@Seali(@arg(...))` attribute. The `@arg` macro accepts the following named options:
 
-### Field-Level Attributes
+| Option | Description | Example |
+|--------|-------------|---------|
+| `short` | Auto-generate short flag from the first character of the field name | `@arg(short)` |
+| `short = 'X'` | Custom short flag | `@arg(short = 'n')` |
+| `long` | Auto-generate long flag from the field name | `@arg(long)` |
+| `long = "name"` | Custom long flag | `@arg(long = "output")` |
+| `default_value = val` | Makes the field optional with a fallback | `@arg(default_value = 4)` |
+| `help = "text"` | Description shown in `--help` output | `@arg(help = "Input file")` |
+| `subcommand` | Marks a `Maybe{SubCmd}` field as a subcommand | `@arg(subcommand)` |
+| `skip` | Exclude this field from CLI parsing entirely | `@arg(skip)` |
 
-| Attribute | Description | Example |
-|-----------|-------------|---------|
-| `@Short` | Auto-generate short flag from first char | `@Short` |
-| `@ShortName(char)` | Custom short flag | `@ShortName('n')` |
-| `@Long` | Auto-generate long flag from field name | `@Long` |
-| `@LongName(String)` | Custom long flag | `@LongName("name")` |
-| `@Default(value)` | Default value | `@Default(1)` |
-| `@Help(String)` | Help text | `@Help("Your name")` |
-| `@Skip` | Skip this field in CLI | `@Skip` |
-
-## API
-
-### `seali::parse($Cmd, String[] args)`
-
-Parses command-line arguments into the given command struct.
+Options can be combined:
 
 ```c3
-Cli cli = seali::parse(Cli, args);
+String output @Seali(@arg(short, long = "out", help = "Output file", default_value = "a.out"));
 ```
 
-The parse macro automatically:
-- Handles `-h` and `--help` flags
-- Applies default values
-- Handles case conversion based on `@RenameAll`
+### Argument Kinds
 
-## Example
+| Kind | How to declare | Required? |
+|------|---------------|-----------|
+| Required flag | `@arg(long)` with no `default_value` | Yes |
+| Optional flag | `@arg(long, default_value = val)` | No (uses default) |
+| Optional (no default) | Field type is `Maybe{T}` | No (absent = `none`) |
+| Positional | No `short`/`long` and no `default_value` | Yes |
+| Subcommand | `Maybe{SubCmd}` + `@arg(subcommand)` | No |
 
-### Full Example
+## Examples
+
+### Flags with defaults
 
 ```c3
-module myapp;
-
-import std::io;
-
-struct Cli @Command("myapp") 
+struct Cli @Command("myapp")
   @About("My awesome CLI application")
-  @RenameAll(KEBAB_CASE)
 {
-  String input_file @Short @Long @Help("Input file path");
-  bool verbose @Short @Long @Default(false) @Help("Enable verbose output");
-  String output @Short @LongName("output") @Help("Output file");
-  uint threads @Short @Default(4) @Help("Number of threads");
+  String input_file  @Seali(@arg(short, long, help = "Input file path"));
+  bool   verbose     @Seali(@arg(short = 'V', long, default_value = false, help = "Enable verbose output"));
+  String output      @Seali(@arg(short, long = "out", help = "Output file", default_value = "out.txt"));
+  uint   threads     @Seali(@arg(short, default_value = 4, help = "Number of threads"));
 }
 
 fn int main(String[] args) {
   Cli cli = seali::parse(Cli, args);
-  
+
   if (cli.verbose) {
     io::printfn("Processing %s with %d threads", cli.input_file, cli.threads);
   }
-  
-  // ... your logic here
-  
+
   return 0;
 }
 ```
-
-### Running the above:
 
 ```bash
 ./build/myapp --help
 ```
 
-Outputs:
 ```
 My awesome CLI application
 
-Usage myapp [OPTIONS] <INPUT_FILE> <OUTPUT>
+Usage myapp [OPTIONS] --input-file <INPUT_FILE>
 
 Options:
- -i, --input-file <INPUT_FILE>  Input file path
- -o, --output <OUTPUT>          Output file
- -v, --verbose [default: false]  Enable verbose output
- -t, --threads <THREADS>       [default: 4] Number of threads
-
+ -V, --verbose                   Enable verbose output [default: false]
+ -o, --out <OUT>                 Output file [default: out.txt]
+ -t, --threads <THREADS>         Number of threads [default: 4]
 ```
+
+### Subcommands
+
+Use a `Maybe{SubCmd}` field with `@arg(subcommand)` to define subcommands. Each subcommand is its own struct marked with `@Command`.
+
+```c3
+struct Cli @Command("myapp")
+  @About("My package manager")
+{
+  Maybe{Install} install @Seali(@arg(subcommand));
+  Maybe{Fetch}   fetch   @Seali(@arg(subcommand));
+}
+
+struct Install @Command("install")
+  @About("Install a library")
+{
+  String name @Seali(@arg(help = "The library to install"));
+}
+
+struct Fetch @Command("fetch")
+  @About("Fetch a tar file")
+{
+  String url @Seali(@arg(help = "The URL to fetch"));
+}
+
+fn int main(String[] args) {
+  Cli cli = seali::parse(Cli, args);
+
+  if (try install = cli.install.get()) {
+    io::printfn("Installing: %s", install.name);
+  }
+  if (try fetch = cli.fetch.get()) {
+    io::printfn("Fetching: %s", fetch.url);
+  }
+
+  return 0;
+}
+```
+
+```bash
+./build/myapp install mylib
+# Output: Installing: mylib
+```
+
+## API
+
+### `seali::parse($Cmd, String[] args)`
+
+Parses command-line arguments into the given command struct. Automatically handles `-h`/`--help`, applies defaults, validates required fields, and exits with an error on unknown options.
+
+```c3
+Cli cli = seali::parse(Cli, args);
+```
+
+**Supported field types:** `String`, `int`, `uint`, `bool`, `Maybe{T}`, and any struct tagged with `@Command` (for subcommands).
 
 ## Project Structure
 
 ```
 seali.c3l/
 ├── src/
-│   ├── main.c3       # Example usage
-│   ├── macros.c3    # Core parsing macros
-│   ├── cmd.c3       # Command definitions
-│   └── utils.c3     # Utility functions
-├── project.json      # Project configuration
-└── README.md         # This file
+│   ├── curse.c3     # @Seali / @arg attribute and config builder
+│   ├── macros.c3    # Core parse macro and help generation
+│   ├── cmd.c3       # Command and Arg struct definitions
+│   ├── utils.c3     # Utility functions
+│   └── main.c3      # Example usage (commented out)
+├── project.json
+└── README.md
 ```
 
 ## Requirements
