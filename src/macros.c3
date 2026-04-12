@@ -315,7 +315,7 @@ macro print_long_about($Cmd) @private {
     io::printn("\n");
     io::printn("Commands:");
     @print_subcommands($Cmd);
-    io::printn("\n");
+    io::printn();
   $else
     io::printn("\n");
   $endif
