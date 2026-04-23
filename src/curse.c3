@@ -95,7 +95,14 @@ macro ArgConfig @arg(...) @builtin {
         $if $typeof($val) == bool &&& $val == true:
           $error "You need to provide a default_value";
         $else
-          $default_value = $val;
+          $if $val == "\"\"":
+            $error "Empty string default values are not allowed. Use Maybe{String} instead.";
+          $endif
+          $if @starts_with($val, "\""):
+            $default_value = $val[1..^2];
+          $else
+            $default_value = $val;
+          $endif
         $endif
         
       $case @starts_with($s, "help"):
