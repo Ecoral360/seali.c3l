@@ -167,21 +167,24 @@ macro ArgConfig @setup_config($cmd_config, $arg) {
 }
 
 macro String @rename(CaseConvention $convention, String $name) @local @const {
-	$switch $convention:
-		$case KEBAB_CASE:
-			var $new_name = "";
-			$foreach $v : $name:
-				$if $v == '_':
-					$new_name +++= "-";
-				$else
-					$new_name +++= $v;
-				$endif
-			$endforeach
-			return $new_name;
+  $switch $convention:
+    $case KEBAB_CASE:
+      var $new_name = "";
+      $foreach $v : $name:
+        $if $v == '_':
+          $new_name +++= "-";
+        $else
+          $new_name +++= $v;
+        $endif
+      $endforeach
+      return $new_name;
 
-		$default:
-			$error @sprintf("Not supported yet: %s", $convention);
-	$endswitch
+    $case VERBATIM:
+      return $name;
+
+    $default:
+      $error @sprintf("Not supported yet: %s", $convention);
+  $endswitch
 }
 
 macro @str_to_value($Type, #value) {
