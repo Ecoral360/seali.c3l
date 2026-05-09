@@ -10,7 +10,7 @@ struct CommandConfig {
   String about;
   String long_about;
   bool help_on_empty;
-	CaseConvention rename_all;
+  CaseConvention rename_all;
 }
 
 attrdef @Command(CommandConfig config) = @tag("seali:command", config);
@@ -248,7 +248,7 @@ macro int? @arg_set_value(#cmd, $arg, $config, args, i) {
     }
   $endif
   #cmd.$eval($arg.name) = val;
-	return @arg_type_size($arg.type, args.len);
+  return @arg_type_size($arg.type, args.len);
 }
 
 macro int @arg_type_size($Type, int max) @local {
@@ -260,7 +260,7 @@ macro int @arg_type_size($Type, int max) @local {
       return max;
 
     $case @is_maybe_type($Type):
-			$Type $t;
+      $Type $t;
       return @arg_type_size($typeof($t.value), max);
 
     $default:
@@ -273,7 +273,7 @@ macro @arg_to_value($Type, args, i) @local {
     $Type $t;
     return maybe::value{$typeof($t.value)}(@arg_to_value($typeof($t.value), args, i));
   $endif
-  
+
   $switch:
     $case $Type == bool:
       return true;
@@ -293,8 +293,8 @@ macro @arg_to_value($Type, args, i) @local {
       // if (i - 1 >= args.len) {
       //   return parse($Type, {args[^2]})!;
       // } else {
-        return parse($Type, args[i - 1..])!;
-      // }
+      return parse($Type, args[i - 1..])!;
+    // }
 
     // $default:
     //   $error "Unsupported type arg '" +++ $Type.nameof +++ "'";
@@ -399,7 +399,7 @@ macro @has_options_args($Cmd) @private {
   var $has_required = false;
   $foreach $member : $Cmd::members :
     ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
-    $if !$config.is_subcommand &&& ($config.default_value.len > 0 ||| @is_maybe_type($member.type)):
+    $if !$config.is_subcommand: // &&& ($config.default_value.len > 0 ||| @is_maybe_type($member.type)):
       return true;
     $endif
   $endforeach
@@ -438,31 +438,34 @@ macro @print_all_args($Cmd) @private {
   var $max_len = 0;
   $foreach $member : $Cmd::members :
     ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
-    $if !$config.is_subcommand &&& ($config.default_value.len != 0 ||| @is_maybe_type($member.type)):
+    $if !$config.is_subcommand: // &&& ($config.default_value.len != 0 ||| @is_maybe_type($member.type)):
       var $all_names = @get_all_names($config);
-      $if $all_names.len > 0:
-        var $member_len = $all_names.len + @arg_value_to_string($member).len + 2; // 2 spaces
-        $if $member_len > $max_len:
-          $max_len = $member_len;
-        $endif
+      var $member_len = $all_names.len + @arg_value_to_string($member).len + 2; // 2 spaces
+      $if $member_len > $max_len:
+        $max_len = $member_len;
       $endif
     $endif
   $endforeach
 
   $foreach $member : $Cmd::members :
     ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
-    $if !$config.is_subcommand &&& ($config.default_value.len != 0 ||| @is_maybe_type($member.type)):
+    $if !$config.is_subcommand: //&&& ($config.default_value.len != 0 ||| @is_maybe_type($member.type)):
       var $all_names = @get_all_names($config);
-      $if $all_names.len > 0:
-        var $arg_value = @arg_value_to_string($member);
-        io::print(@sprintf(" %s", $all_names));
-        io::print(@sprintf(" %s", $arg_value));
-        $for var $i = $all_names.len + $arg_value.len + 2; $i < $max_len + 1; $i++:
-          io::print(" ");
-        $endfor
-        @print_arg_desc($config);
-        io::printn();
-      $endif
+      var $arg_value = @arg_value_to_string($member);
+      io::print(
+        @sprintf(
+          "%s%s %s%s", 
+          $all_names.len == 0 ??? "" : " ", 
+          $all_names, 
+          $arg_value, 
+          $all_names.len == 0 ??? " " : ""
+        )
+      );
+      $for var $i = $all_names.len + $arg_value.len + 2; $i < $max_len + 1; $i++:
+        io::print(" ");
+      $endfor
+      @print_arg_desc($config);
+      io::printn();
     $endif
   $endforeach
 }
@@ -515,9 +518,6 @@ macro @is_maybe_type($Type) {
           ($defined($value.get()!) ||| $defined($value == maybe::value{$typeof($value.value)}($value.value))));
 }
 
-
-
-
 macro @get_maybe_inner_type($Type) {
   $if @is_maybe_type($Type):
     $Type $t;
@@ -525,26 +525,4 @@ macro @get_maybe_inner_type($Type) {
   $endif
   return $Type;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
