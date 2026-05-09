@@ -3,28 +3,25 @@ import seali;
 import std::io;
 import std::collections::maybe;
 
-struct Cli @Command("myapp") 
-  @About("My awesome CLI application")
+struct Cli @Command({ .name = "myapp", .about = "My awesome CLI application" })
 {
-  String input_file @Seali(@arg(long, help = "Input file path", default_value = "a"));
-  bool verbose @Seali(@arg(short = 'V', long, default_value = false, help = "Enable verbose output"));
-  String output @Seali(@arg(short, long = "out", help = "Output file", default_value = "b"));
-  uint threads @Seali(@arg(short, default_value = 4, help = "Number of threads"));
+  String input_file @Seali(arg(long, help = "Input file path", default_value = "a"));
+  bool verbose @Seali(arg(short = 'V', long, default_value = false, help = "Enable verbose output"));
+  String output @Seali(arg(short, long = "out", help = "Output file", default_value = "b"));
+  uint threads @Seali(arg(short, default_value = 4, help = "Number of threads"));
 
-  Maybe{Install} install @Seali(@arg(subcommand));
-  Maybe{Fetch} fetch @Seali(@arg(subcommand));
+  Maybe{Install} install @Seali(arg(subcommand));
+  Maybe{Fetch} fetch @Seali(arg(subcommand));
 }
 
-struct Install @Command("install") 
-  @About("Install libraries")
+struct Install @Command({ .name = "install", .about = "Install libraries" }) 
 {
-  String name @Seali(@arg(help = "The lib to install"));
+  String name @Seali(arg(help = "The lib to install"));
 }
 
-struct Fetch @Command("fetch") 
-  @About("Fetch a tar file")
+struct Fetch @Command({ .name = "fetch", .about = "Fetch a tar file" })
 {
-  String url @Seali(@arg(help = "The url to fetch"));
+  String url @Seali(arg(help = "The url to fetch"));
 }
 
 fn int main(String[] args) {

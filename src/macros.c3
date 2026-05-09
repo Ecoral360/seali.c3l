@@ -9,12 +9,11 @@ struct CommandConfig {
   String version;
   String about;
   String long_about;
+  bool help_on_empty;
+	CaseConvention rename_all;
 }
 
-attrdef @Command(String name) = @tag("seali:cmd_name", name);
-
-attrdef @About(String about) = @tag("seali:about", about);
-attrdef @LongAbout(String long_about) = @tag("seali:long_about", long_about);
+attrdef @Command(CommandConfig config) = @tag("seali:command", config);
 
 enum CaseConvention : (String example) {
   KEBAB_CASE { "kebab-case" },
@@ -51,9 +50,9 @@ macro ArgConfig.@is_unamed($self) {
 macro parse($Cmd, String[] _args) {
   var args = _args[1..];
 
-  // if (args.len == 0) {
-  //   print_long_about($Cmd);
-  // }
+  if (args.len == 0 && $Cmd::get_tag("seali:command").help_on_empty) {
+    print_long_about($Cmd);
+  }
 
   List{String} args_with_values;
   args_with_values.init(mem);
@@ -63,7 +62,7 @@ macro parse($Cmd, String[] _args) {
 
   // set the default value of all the field that have one
   $foreach $member : $Cmd::members :
-    ArgConfig $config = @setup_config($member);
+    ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
     $if !$config.skip:
       $if $config.default_value.len > 0:
         args_with_values.push($member.name);
@@ -91,7 +90,7 @@ macro parse($Cmd, String[] _args) {
   int i = 0;
   while (i < args.len) {
     $foreach $member : $Cmd::members:
-      ArgConfig $config = @setup_config($member);
+      ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
       $if !$config.skip:
         if (args[i] == "--help") print_long_about($Cmd);
         if (args[i] == "-h") print_short_about($Cmd);
@@ -99,7 +98,7 @@ macro parse($Cmd, String[] _args) {
         if (@arg_name_matches($config, $member, args[i]) && !got_value.contains($member.name)) {
           args_with_values.push($member.name);
           got_value.push($member.name);
-          $if !$config.@is_unamed():
+          $if !($config.@is_unamed() ||| $member.type == bool):
             i++;
           $endif
           i += @arg_set_value(cmd, $member, $config, args, i)!;
@@ -115,7 +114,7 @@ macro parse($Cmd, String[] _args) {
   var has_missing = false;
   // check that each field has been initialized
   $foreach $member : $Cmd::members:
-    ArgConfig $config = @setup_config($member);
+    ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
     $if !$config.skip:
       if (!args_with_values.contains($member.name)) {
         if (!has_missing) {
@@ -142,7 +141,7 @@ macro parse($Cmd, String[] _args) {
   return cmd;
 }
 
-macro ArgConfig @setup_config($arg) {
+macro ArgConfig @setup_config($cmd_config, $arg) {
   ArgConfig $current_config = $arg.has_tag("seali:arg") ??? $arg.get_tag("seali:arg") : {};
 
   char $shortn;
@@ -153,7 +152,7 @@ macro ArgConfig @setup_config($arg) {
   $endif
 
   $if $current_config.autolong:
-    $longn = $arg.name;
+    $longn = @rename($cmd_config.rename_all, $arg.name);
   $endif
 
   $if $current_config.is_subcommand:
@@ -165,6 +164,24 @@ macro ArgConfig @setup_config($arg) {
     .shortn = $shortn,
     .longn = $longn,
   };
+}
+
+macro String @rename(CaseConvention $convention, String $name) @local @const {
+	$switch $convention:
+		$case KEBAB_CASE:
+			var $new_name = "";
+			$foreach $v : $name:
+				$if $v == '_':
+					$new_name +++= "-";
+				$else
+					$new_name +++= $v;
+				$endif
+			$endforeach
+			return $new_name;
+
+		$default:
+			$error @sprintf("Not supported yet: %s", $convention);
+	$endswitch
 }
 
 macro @str_to_value($Type, #value) {
@@ -191,10 +208,10 @@ macro @str_to_value($Type, #value) {
 macro bool @arg_name_matches(ArgConfig $config, $member, value) {
   $if $config.is_subcommand:
     var $inner = @get_maybe_inner_type($member.type);
-    $if !$inner.has_tag("seali:cmd_name"):
+    $if !$inner.has_tag("seali:command"):
       $error "Subcommands must have the @Command attribute";
     $endif
-    if (value == $inner.get_tag("seali:cmd_name")) {
+    if (value == $inner.get_tag("seali:command").name) {
       return true;
     }
   $endif
@@ -228,23 +245,27 @@ macro int? @arg_set_value(#cmd, $arg, $config, args, i) {
     }
   $endif
   #cmd.$eval($arg.name) = val;
+	return @arg_type_size($arg.type, args.len);
+}
+
+macro int @arg_type_size($Type, int max) @local {
   $switch:
-    $case $arg.type == bool:
+    $case $Type == bool:
       return 1;
 
-    $case @is_maybe_type($arg.type):
-      return args.len;
+    $case $Type::has_tag("seali:command"):
+      return max;
 
-    $case $arg.type.has_tag("seali:cmd_name"):
-      return args.len;
+    $case @is_maybe_type($Type):
+			$Type $t;
+      return @arg_type_size($typeof($t.value), max);
 
     $default:
       return 1;
   $endswitch
-
 }
 
-macro @arg_to_value($Type, args, i) {
+macro @arg_to_value($Type, args, i) @local {
   $if @is_maybe_type($Type):
     $Type $t;
     return maybe::value{$typeof($t.value)}(@arg_to_value($typeof($t.value), args, i));
@@ -265,7 +286,7 @@ macro @arg_to_value($Type, args, i) {
     $case $Type == String:
       return args[i];
 
-    $case $Type::has_tag("seali:cmd_name"):
+    $case $Type::has_tag("seali:command"):
       // if (i - 1 >= args.len) {
       //   return parse($Type, {args[^2]})!;
       // } else {
@@ -279,18 +300,18 @@ macro @arg_to_value($Type, args, i) {
 
 
 macro print_long_about($Cmd) @private {
-  $if !$Cmd::has_tag("seali:cmd_name"):
+  $if !$Cmd::has_tag("seali:command"):
     $error "Commands must be marked with the @Command tag";
   $endif
 
-  var $name = $Cmd::get_tag("seali:cmd_name");
+  var $name = $Cmd::get_tag("seali:command").name;
 
   $switch: 
-    $case $Cmd::has_tag("seali:long_about"):
-      io::printn($Cmd.get_tag("seali::long_about") +++ "\n");
+    $case $Cmd::get_tag("seali:command").long_about.len != 0:
+      io::printn($Cmd.get_tag("seali::command").long_about +++ "\n");
 
-    $case $Cmd::has_tag("seali:about"):
-      io::printn($Cmd::get_tag("seali:about") +++ "\n");
+    $case $Cmd::get_tag("seali:command").about.len != 0:
+      io::printn($Cmd::get_tag("seali:command").about +++ "\n");
 
   $endswitch
 
@@ -334,13 +355,13 @@ macro print_short_about($Cmd) @private {
 macro @print_subcommands($Cmd) @private {
   var $max_len = 0;
   $foreach $member : $Cmd::members :
-    ArgConfig $config = @setup_config($member);
+    ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
     $if $config.is_subcommand:
       var $inner = @get_maybe_inner_type($member.type);
-      $if !$inner.has_tag("seali:cmd_name"):
+      $if !$inner.has_tag("seali:command"):
         $error "Subcommands must have the @Command attribute";
       $endif
-      var $name = $inner.get_tag("seali:cmd_name");
+      var $name = $inner.get_tag("seali:command").name;
       $if $name.len > $max_len:
         $max_len = $name.len;
       $endif
@@ -348,23 +369,23 @@ macro @print_subcommands($Cmd) @private {
   $endforeach
 
   $foreach $member : $Cmd::members :
-    ArgConfig $config = @setup_config($member);
+    ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
     $if $config.is_subcommand:
       var $inner = @get_maybe_inner_type($member.type);
-      $if !$inner.has_tag("seali:cmd_name"):
+      $if !$inner.has_tag("seali:command"):
         $error "Subcommands must have the @Command attribute";
       $endif
-      var $name = $inner.get_tag("seali:cmd_name");
+      var $name = $inner.get_tag("seali:command").name;
       io::print(" " +++ $name);
       $for var $i = $name.len; $i < $max_len + 2; $i++:
         io::print(" ");
       $endfor
       $switch: 
-        $case $inner.has_tag("seali:long_about"):
-          io::printn($inner.get_tag("seali::long_about"));
+        $case $inner.get_tag("seali:command").long_about.len != 0:
+          io::printn($inner.get_tag("seali::command").long_about);
 
-        $case $inner.has_tag("seali:about"):
-          io::printn($inner.get_tag("seali:about"));
+        $case $inner.get_tag("seali:command").about.len != 0:
+          io::printn($inner.get_tag("seali:command").about);
 
       $endswitch
     $endif
@@ -374,7 +395,7 @@ macro @print_subcommands($Cmd) @private {
 macro @has_options_args($Cmd) @private {
   var $has_required = false;
   $foreach $member : $Cmd::members :
-    ArgConfig $config = @setup_config($member);
+    ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
     $if !$config.is_subcommand &&& ($config.default_value.len > 0 ||| @is_maybe_type($member.type)):
       return true;
     $endif
@@ -384,7 +405,7 @@ macro @has_options_args($Cmd) @private {
 
 macro @print_required_args($Cmd) @private {
   $foreach $member : $Cmd::members :
-    ArgConfig $config = @setup_config($member);
+    ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
     $if $config.default_value.len == 0 &&& !@is_maybe_type($member.type):
       var $name = @get_name($config);
       $if $name.len > 0:
@@ -413,7 +434,7 @@ macro @get_name(ArgConfig $config) @private {
 macro @print_all_args($Cmd) @private {
   var $max_len = 0;
   $foreach $member : $Cmd::members :
-    ArgConfig $config = @setup_config($member);
+    ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
     $if !$config.is_subcommand &&& ($config.default_value.len != 0 ||| @is_maybe_type($member.type)):
       var $all_names = @get_all_names($config);
       $if $all_names.len > 0:
@@ -426,7 +447,7 @@ macro @print_all_args($Cmd) @private {
   $endforeach
 
   $foreach $member : $Cmd::members :
-    ArgConfig $config = @setup_config($member);
+    ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
     $if !$config.is_subcommand &&& ($config.default_value.len != 0 ||| @is_maybe_type($member.type)):
       var $all_names = @get_all_names($config);
       $if $all_names.len > 0:
@@ -501,6 +522,7 @@ macro @get_maybe_inner_type($Type) {
   $endif
   return $Type;
 }
+
 
 
 

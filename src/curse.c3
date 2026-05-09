@@ -50,7 +50,7 @@ macro @get_val($s) {
   return true;
 }
 
-macro ArgConfig @arg(...) @builtin {
+macro ArgConfig arg(...) @builtin {
   char $shortn;
   bool $autoshort;
 
@@ -65,8 +65,8 @@ macro ArgConfig @arg(...) @builtin {
 
   bool $skip;
 
-  $for var $i = 0; $i < $vacount; $i++ :
-    var $s = $stringify($vaexpr[$i]);
+  $for var $i = 0; $i < $vaarg.len; $i++ :
+    var $s = $stringify($vaarg[$i]);
     $switch:
       $case @starts_with($s, "short"):
         var $val = @get_val($s);
@@ -152,3 +152,4 @@ macro ArgConfig @arg(...) @builtin {
     .skip = $skip,
   };
 }
+
