@@ -1,4 +1,8 @@
+<*
+ Please ignore this module, it has its name for a reason
+*>
 module seali::curse;
+import seali::utils;
 import std::collections::maybe;
 
 
@@ -65,6 +69,8 @@ macro ArgConfig arg(...) @builtin {
 
   bool $skip;
 
+  EnumVal $enum_as;
+
   $for var $i = 0; $i < $vaarg.len; $i++ :
     var $s = $stringify($vaarg[$i]);
     $switch:
@@ -99,6 +105,23 @@ macro ArgConfig arg(...) @builtin {
             $error "Empty string default values are not allowed. Use Maybe{String} instead.";
           $endif
           $default_value = $val;
+        $endif
+
+      $case @starts_with($s, "enum_as"):
+        var $val = @get_val($s);
+        $if $Typeof($val) == bool &&& $val == true:
+          $enum_as = { .type = DESCRIPTION };
+        $else
+          $switch:
+            $case $val == "DESCRIPTION":
+              $enum_as = { .type = DESCRIPTION };
+            $case $val == "ORDINAL":
+              $enum_as = { .type = ORDINAL };
+            $case $val.len > 0 && utils::@is_lower($val[0]):
+              $enum_as = { .type = FIELD, .field = $val };
+            $default:
+              $error "value of `enum` must be DESCRIPTION, ORDINAL, or the identifier name of the field";
+          $endswitch
         $endif
         
       $case @starts_with($s, "help"):
@@ -146,6 +169,8 @@ macro ArgConfig arg(...) @builtin {
     .is_subcommand = $is_subcommand,
 
     .skip = $skip,
+
+    .enum_as = $enum_as,
   };
 }
 

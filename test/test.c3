@@ -375,3 +375,41 @@ fn void test_multi_short_flags_combined_separately() @test {
     assert(cli.count == 5);
     assert(cli.verbose == false);
 }
+
+
+enum LogLevel : (String name) {
+  VERBOSE { "verbose" },
+  DEBUG { "debug" },
+  INFO { "information" },
+  WARN { "warn" },
+  ERROR { "error" },
+}
+struct EnumDesCli @Command({.name = "t"}) {
+    LogLevel log_level @Seali(arg(long, help = "Log level"));
+}
+
+struct EnumOrdCli @Command({.name = "t"}) {
+    LogLevel log_level @Seali(arg(long, enum_as = ORDINAL, help = "Log level"));
+}
+
+struct EnumLookupCli @Command({.name = "t"}) {
+    LogLevel log_level @Seali(arg(long, enum_as = name, help = "Log level"));
+}
+
+fn void test_enum_description() @test {
+    String[] args = {"prog", "--log-level", "info"};
+    EnumDesCli cli = seali::parse(EnumDesCli, args)!!;
+    assert(cli.log_level == INFO);
+}
+
+fn void test_enum_ordinal() @test {
+    String[] args = {"prog", "--log-level", "2"};
+    EnumOrdCli cli = seali::parse(EnumOrdCli, args)!!;
+    assert(cli.log_level == INFO);
+}
+
+fn void test_enum_lookup() @test {
+    String[] args = {"prog", "--log-level", "information"};
+    EnumLookupCli cli = seali::parse(EnumLookupCli, args)!!;
+    assert(cli.log_level == INFO);
+}

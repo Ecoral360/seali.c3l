@@ -32,6 +32,7 @@
     "seali": {
       // Executable or library.
       "type": "executable",
+      "features": ["SEALI_DEV"],
       // Additional libraries, sources
       // and overrides of global settings here.
     },

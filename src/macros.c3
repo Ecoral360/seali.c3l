@@ -1,3 +1,6 @@
+<*
+  The seali lib
+*>
 module seali;
 import libc;
 import std::io;
@@ -28,6 +31,17 @@ attrdef @Command(CommandConfig config) = @tag("seali:command", config);
 
 // ------------------------------------
 
+enum EnumValType {
+  DESCRIPTION,
+  ORDINAL,
+  FIELD
+}
+
+struct EnumVal {
+  EnumValType type;
+  String field;
+}
+
 struct ArgConfig {
   char shortn;
   bool autoshort;
@@ -39,7 +53,10 @@ struct ArgConfig {
   String env;
   bool skip;
   bool is_subcommand;
+  EnumVal enum_as;
 }
+
+faultdef INVALID_ENUM_VALUE;
 
 macro ArgConfig.@is_unamed($self) {
   return $self.longn.len == 0 &&& $self.shortn == 0;
@@ -65,7 +82,14 @@ macro parse($Cmd, String[] _args) {
       $if $config.default_value.len > 0:
         args_with_values.push($member.name);
         do {
-          var val = ($Typefrom($member.type)) utils::@expand_val($config.default_value);
+          $if $member.type.kind == ENUM:
+            $if $config.default_value[0] == '"' ||| !$defined($Typefrom($member.type).$eval($config.default_value)):
+              $error @sprintf("The default value of an enum member must be the member's description without the type (found %s).", $config.default_value);
+            $endif
+            var val = $Typefrom($member.type).$eval($config.default_value);
+          $else
+            var val = ($Typefrom($member.type)) utils::@expand_val($config.default_value);
+          $endif
           $if $defined(val!):
             if (catch val) {
               val!;
@@ -134,7 +158,7 @@ macro parse($Cmd, String[] _args) {
         }
         var $name = @get_name($config);
         $if $name.len == 0:
-          io::eprint(@sprintf("<%s>", $member.name.@to_upper()));
+          io::eprint(@sprintf("<%s>", @str_upper($member.name)));
         $else
           io::eprint($name);
         $endif
@@ -229,7 +253,7 @@ macro bool @arg_name_matches(ArgConfig $config, $member, value) {
 
 // returns the number of consummed values
 macro int? @arg_set_value(#cmd, $arg, $config, args, i) {
-  var val = @arg_to_value($arg.type, args, i);
+  var val = @arg_to_value($arg.type, args, i, $config);
   $if $defined(val!):
     if (catch val) {
       val!;
@@ -242,9 +266,6 @@ macro int? @arg_set_value(#cmd, $arg, $config, args, i) {
 
 macro int @arg_type_size($Type, int max) @local {
   $switch:
-    $case $Type == bool:
-      return 1;
-
     $case $Type::has_tag("seali:command"):
       return max;
 
@@ -257,10 +278,10 @@ macro int @arg_type_size($Type, int max) @local {
   $endswitch
 }
 
-macro @arg_to_value($Type, args, i) @local {
+macro @arg_to_value($Type, args, i, $config) @local {
   $if @is_maybe_type($Type):
     $Type $t;
-    return maybe::value{$Typeof($t.value)}(@arg_to_value($Typeof($t.value), args, i));
+    return maybe::value{$Typeof($t.value)}(@arg_to_value($Typeof($t.value), args, i, $config));
   $endif
 
   $switch:
@@ -269,7 +290,7 @@ macro @arg_to_value($Type, args, i) @local {
 
     $case $Type == int:
       String arg = args[i];
-      return arg.to_int()!;
+      return arg.to_int();
 
     $case $Type == char:
       String arg = args[i];
@@ -277,13 +298,38 @@ macro @arg_to_value($Type, args, i) @local {
 
     $case $Type == uint:
       String arg = args[i];
-      return arg.to_uint()!;
+      return arg.to_uint();
 
     $case $Type == String:
       return args[i];
 
+    $case $Type::kind == ENUM:
+      String arg = args[i];
+      $switch $config.enum_as.type:
+        $case DESCRIPTION:
+          arg = arg.to_upper_tcopy();
+          int found = -1;
+          foreach(j, v : $Type::names) {
+            if (v == arg) {
+              found = (int) j;
+              break;
+            }
+          }
+
+          if (found == -1) {
+            return INVALID_ENUM_VALUE~;
+          }
+          return $Type::values[found];
+
+        $case ORDINAL:
+          return $Type::from_ordinal(arg.to_int()!);
+
+        $default:
+          return $Type::lookup_field($eval($config.enum_as.field), arg);
+      $endswitch
+
     $case $Type::has_tag("seali:command"):
-      return parse($Type, args[i - 1..])!;
+      return parse($Type, args[i - 1..]);
 
     // $default:
     //   $error "Unsupported type arg '" +++ $Type.nameof +++ "'";
@@ -403,10 +449,10 @@ macro @print_required_args($Cmd) @private {
       $if $name.len > 0:
         io::print(" " +++ $name);
       $endif
-      io::print(@sprintf(" <%s>", $member.name.@to_upper()));
+      io::print(@sprintf(" <%s>", @str_upper($member.name)));
     $else
       $if $config.@is_unamed():
-        io::print(@sprintf(" [<%s>]", $member.name.@to_upper()));
+        io::print(@sprintf(" [<%s>]", @str_upper($member.name)));
       $endif
     $endif
   $endforeach
@@ -429,7 +475,7 @@ macro @print_all_args($Cmd) @private {
     ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
     $if !$config.is_subcommand: // &&& ($config.default_value.len != 0 ||| @is_maybe_type($member.type)):
       var $all_names = @get_all_names($config);
-      var $member_len = $all_names.len + @arg_value_to_string($member).len + 2; // 2 spaces
+      var $member_len = $all_names.len + @arg_value_to_string($member, $config).len + 2; // 2 spaces
       $if $member_len > $max_len:
         $max_len = $member_len;
       $endif
@@ -440,7 +486,7 @@ macro @print_all_args($Cmd) @private {
     ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
     $if !$config.is_subcommand: //&&& ($config.default_value.len != 0 ||| @is_maybe_type($member.type)):
       var $all_names = @get_all_names($config);
-      var $arg_value = @arg_value_to_string($member);
+      var $arg_value = @arg_value_to_string($member, $config);
       io::print(
         @sprintf(
           "%s%s %s%s", 
@@ -453,25 +499,50 @@ macro @print_all_args($Cmd) @private {
       $for var $i = $all_names.len + $arg_value.len + 2; $i < $max_len + 1; $i++:
         io::print(" ");
       $endfor
-      @print_arg_desc($config);
+      @print_arg_desc($member, $config);
       io::printn();
     $endif
   $endforeach
 }
 
-macro @arg_value_to_string($arg) {
+macro @arg_value_to_string($arg, $config) {
   $switch:
     $case $arg.type == bool:
       return "";
 
     $default:
-      return @sprintf("<%s>", $arg.name.@to_upper());
+      return @sprintf("<%s>", @str_upper($arg.name));
   $endswitch
 }
 
-macro @print_arg_desc(ArgConfig $config) {
+macro @print_arg_desc($arg, ArgConfig $config) {
   $if $config.help.len > 0:
     io::printf(@sprintf(" %s", $config.help));
+  $endif
+
+  $if $arg.type.kind == ENUM:
+    String $s = "";
+    $switch $config.enum_as.type:
+      $case DESCRIPTION:
+        $foreach $i, $name : $arg.type.names:
+          $if $i != 0:
+            $s +++= " | ";
+          $endif
+          $s +++= @str_lower($name);
+        $endforeach
+
+      $case ORDINAL:
+        $s = @sprintf("0..%s", $arg.type.values.len - 1);
+
+      $default:
+        $foreach $i, $value : $arg.type.values:
+          $if $i != 0:
+            $s +++= " | ";
+          $endif
+          $s +++= @str_lower($value.$eval($config.enum_as.field));
+        $endforeach
+    $endswitch
+    io::printf(@sprintf(" {values: %s}", $s));
   $endif
 
   $if $config.default_value.len > 0:
