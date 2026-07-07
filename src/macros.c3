@@ -62,7 +62,7 @@ macro ArgConfig.@is_unamed($self) {
   return $self.longn.len == 0 &&& $self.shortn == 0;
 }
 
-fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> {
+fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
   String[] args = _args[1..];
 
   if (args.len == 0 && Cmd::get_tag("seali:command").help_on_empty) {
@@ -70,68 +70,32 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> {
   }
 
   List{String} args_with_values;
-  args_with_values.init(mem);
-  defer args_with_values.free();
-
-  // set the default value of all the field that have one
-  $foreach $member : Cmd::members :
-    ArgConfig $config = @setup_config(Cmd::get_tag("seali:command"), $member);
-    $if !$config.skip:
-      $if $config.default_value.len > 0:
-        args_with_values.push($member.name);
-        do {
-          $if $member.type.kind == ENUM:
-            $if $config.default_value[0] == '"' ||| !$defined($Typefrom($member.type).$eval($config.default_value)):
-              $error @sprintf("The default value of an enum member must be the member's description without the type (found %s).", $config.default_value);
-            $endif
-            var val @safeinfer = $Typefrom($member.type).$eval($config.default_value);
-          $else
-            var val @safeinfer = ($Typefrom($member.type)) utils::@expand_val($config.default_value);
-          $endif
-          $if $defined(val!):
-            if (catch val) {
-              val!;
-              return;
-            }
-          $endif
-          cmd.$eval($member.name) = val;
-        };
-      $endif
-      $if @is_maybe_type($member.type):
-        args_with_values.push($member.name);
-      $endif
-    $endif
-  $endforeach
+  args_with_values.tinit();
 
   List{String} got_value;
-  got_value.init(mem);
-  defer got_value.free();
+  got_value.tinit();
 
   int i = 0;
   while (i < args.len) {
-    String name;
+    if (args[i] == "--help") print_long_about{Cmd}();
+    if (args[i] == "-h") print_short_about{Cmd}();
+
+    String name = args[i];
+    bool eq_syntax = false;
     if (try eq_idx = args[i].index_of("=")) {
       name = args[i][..eq_idx - 1];
       args[i] = args[i][eq_idx + 1..args[i].len-1];
+      eq_syntax = true;
     }
+
     $foreach $member : Cmd::members:
       ArgConfig $config = @setup_config(Cmd::get_tag("seali:command"), $member);
       $if !$config.skip:
-        if (args[i] == "--help") print_long_about{Cmd}();
-        if (args[i] == "-h") print_short_about{Cmd}();
-
-        if (name.len > 0) {
-          if (@arg_name_matches($config, $member, name) && !got_value.contains($member.name)) {
-            args_with_values.push($member.name);
-            got_value.push($member.name);
-            i += @arg_set_value(cmd, $member, $config, args, i)!;
-            continue;
-          }
-        } else if (@arg_name_matches($config, $member, args[i]) && !got_value.contains($member.name)) {
+        if (@arg_name_matches($config, $member, name) && !got_value.contains($member.name)) {
           args_with_values.push($member.name);
           got_value.push($member.name);
           $if !($config.@is_unamed() ||| $member.type == bool):
-            i++;
+            if (!eq_syntax) i++;
           $endif
           i += @arg_set_value(cmd, $member, $config, args, i)!;
           continue;
@@ -143,35 +107,49 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> {
     thread::exit(-1);
   }
 
-  bool has_missing = false;
+  List{String} missing;
+  missing.tinit();
+
   // check that each field has been initialized
   $foreach $member : Cmd::members:
     ArgConfig $config = @setup_config(Cmd::get_tag("seali:command"), $member);
     $if !$config.skip:
       if (!args_with_values.contains($member.name)) {
-        if (!has_missing) {
-          io::eprint("Missing required option ");
-        } else {
-          io::eprint(", ");
-        }
-        var $name = @get_name($config);
-        $if $name.len == 0:
-          io::eprint(@sprintf("<%s>", @str_upper($member.name)));
-        $else
-          io::eprint($name);
-        $endif
-        has_missing = true;
+        $switch: 
+          $case $config.default_value.len > 0:
+            do {
+              $if $member.type.kind == ENUM:
+                $if $config.default_value[0] == '"' ||| !$defined($Typefrom($member.type).$eval($config.default_value)):
+                  $error @sprintf("The default value of an enum member must be the member's description without the type (found %s).", $config.default_value);
+                $endif
+                var val @safeinfer = $Typefrom($member.type).$eval($config.default_value);
+              $else
+                var val @safeinfer = ($Typefrom($member.type)) utils::@expand_val($config.default_value);
+              $endif
+              $if $defined(val!):
+                if (catch val) {
+                  val!;
+                  return;
+                }
+              $endif
+              cmd.$eval($member.name) = val;
+            };
+
+          $case !@is_maybe_type($member.type):
+            var $name = @get_name($config);
+            missing.push($name.len == 0 ??? @sprintf("<%s>", @str_upper($member.name)) : $name);
+        $endswitch
       }
     $endif
   $endforeach
 
-  if (has_missing) {
-    io::eprintn();
+  if (missing.len() > 0) {
+    io::eprintfn("Missing required option: %s", string::tjoin(missing.to_tarray(), ", "));
     thread::exit(-1);
   }
 }
 
-macro ArgConfig @setup_config($cmd_config, $arg) {
+macro ArgConfig @setup_config($cmd_config, $arg) @const {
   ArgConfig $current_config = $arg.has_tag("seali:arg") ??? $arg.get_tag("seali:arg") : {};
 
   char $shortn = $current_config.shortn;
@@ -257,17 +235,17 @@ macro int? @arg_set_value(#cmd, $arg, $config, args, i) {
     }
   $endif
   #cmd.$eval($arg.name) = val;
-  return @arg_type_size($arg.type, args.len);
+  return arg_type_size{$arg.type}(args.len);
 }
 
-macro int @arg_type_size($Type, int max) @local {
+fn int arg_type_size(int max) <Type> @local {
   $switch:
-    $case $Type::has_tag("seali:command"):
+    $case Type::has_tag("seali:command"):
       return max;
 
-    $case @is_maybe_type($Type):
-      $Type $t;
-      return @arg_type_size($Typeof($t.value), max);
+    $case @is_maybe_type(Type):
+      Type $t;
+      return arg_type_size{$Typeof($t.value)}(max);
 
     $default:
       return 1;
