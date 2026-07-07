@@ -1,6 +1,6 @@
 module derive;
 
-macro derive(String $typename, ...) @const @builtin {
+macro derive(String $typename, ...) @const @builtin @weak {
   var $out = "";
   $for int $i = 0; $i < $vaarg.len; $i++:
     $out +++= $eval($stringify($vaarg[$i]))($typename);
