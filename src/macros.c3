@@ -2,7 +2,7 @@
   The seali lib
 *>
 module seali;
-import libc;
+import std::thread;
 import std::io;
 import std::collections::list;
 import std::collections::maybe;
@@ -62,22 +62,20 @@ macro ArgConfig.@is_unamed($self) {
   return $self.longn.len == 0 &&& $self.shortn == 0;
 }
 
-macro parse($Cmd, String[] _args) {
-  var args = _args[1..];
+fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> {
+  String[] args = _args[1..];
 
-  if (args.len == 0 && $Cmd::get_tag("seali:command").help_on_empty) {
-    print_long_about($Cmd);
+  if (args.len == 0 && Cmd::get_tag("seali:command").help_on_empty) {
+    print_long_about{Cmd}();
   }
 
   List{String} args_with_values;
   args_with_values.init(mem);
   defer args_with_values.free();
 
-  $Cmd cmd;
-
   // set the default value of all the field that have one
-  $foreach $member : $Cmd::members :
-    ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
+  $foreach $member : Cmd::members :
+    ArgConfig $config = @setup_config(Cmd::get_tag("seali:command"), $member);
     $if !$config.skip:
       $if $config.default_value.len > 0:
         args_with_values.push($member.name);
@@ -86,14 +84,14 @@ macro parse($Cmd, String[] _args) {
             $if $config.default_value[0] == '"' ||| !$defined($Typefrom($member.type).$eval($config.default_value)):
               $error @sprintf("The default value of an enum member must be the member's description without the type (found %s).", $config.default_value);
             $endif
-            var val = $Typefrom($member.type).$eval($config.default_value);
+            var val @safeinfer = $Typefrom($member.type).$eval($config.default_value);
           $else
-            var val = ($Typefrom($member.type)) utils::@expand_val($config.default_value);
+            var val @safeinfer = ($Typefrom($member.type)) utils::@expand_val($config.default_value);
           $endif
           $if $defined(val!):
             if (catch val) {
               val!;
-              return cmd;
+              return;
             }
           $endif
           cmd.$eval($member.name) = val;
@@ -116,11 +114,11 @@ macro parse($Cmd, String[] _args) {
       name = args[i][..eq_idx - 1];
       args[i] = args[i][eq_idx + 1..args[i].len-1];
     }
-    $foreach $member : $Cmd::members:
-      ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
+    $foreach $member : Cmd::members:
+      ArgConfig $config = @setup_config(Cmd::get_tag("seali:command"), $member);
       $if !$config.skip:
-        if (args[i] == "--help") print_long_about($Cmd);
-        if (args[i] == "-h") print_short_about($Cmd);
+        if (args[i] == "--help") print_long_about{Cmd}();
+        if (args[i] == "-h") print_short_about{Cmd}();
 
         if (name.len > 0) {
           if (@arg_name_matches($config, $member, name) && !got_value.contains($member.name)) {
@@ -142,13 +140,13 @@ macro parse($Cmd, String[] _args) {
     $endforeach
 
     io::eprintfn("Unknown option '%s'\n", args[i]);
-    libc::exit(-1);
+    thread::exit(-1);
   }
 
-  var has_missing = false;
+  bool has_missing = false;
   // check that each field has been initialized
-  $foreach $member : $Cmd::members:
-    ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
+  $foreach $member : Cmd::members:
+    ArgConfig $config = @setup_config(Cmd::get_tag("seali:command"), $member);
     $if !$config.skip:
       if (!args_with_values.contains($member.name)) {
         if (!has_missing) {
@@ -169,10 +167,8 @@ macro parse($Cmd, String[] _args) {
 
   if (has_missing) {
     io::eprintn();
-    libc::exit(-1);
+    thread::exit(-1);
   }
-
-  return cmd;
 }
 
 macro ArgConfig @setup_config($cmd_config, $arg) {
@@ -336,25 +332,24 @@ macro @arg_to_value($Type, args, i, $config) @local {
   $endswitch
 }
 
-
-macro print_long_about($Cmd) @private {
-  $if !$Cmd::has_tag("seali:command"):
+fn void print_long_about() <Cmd> @private {
+  $if !Cmd::has_tag("seali:command"):
     $error "Commands must be marked with the @Command tag";
   $endif
 
-  var $name = $Cmd::get_tag("seali:command").name;
+  var $name = Cmd::get_tag("seali:command").name;
 
   $switch: 
-    $case $Cmd::get_tag("seali:command").long_about.len != 0:
-      io::printn($Cmd.get_tag("seali::command").long_about +++ "\n");
+    $case Cmd::get_tag("seali:command").long_about.len != 0:
+      io::printn(Cmd.get_tag("seali::command").long_about +++ "\n");
 
-    $case $Cmd::get_tag("seali:command").about.len != 0:
-      io::printn($Cmd::get_tag("seali:command").about +++ "\n");
+    $case Cmd::get_tag("seali:command").about.len != 0:
+      io::printn(Cmd::get_tag("seali:command").about +++ "\n");
 
   $endswitch
 
   var $has_subcommands = false;
-  $foreach $member : $Cmd::members :
+  $foreach $member : Cmd::members :
     $if $member.has_tag("seali:arg"):
       $if $member.get_tag("seali:arg").is_subcommand:
         $has_subcommands = true;
@@ -363,31 +358,31 @@ macro print_long_about($Cmd) @private {
   $endforeach
 
   io::print(@sprintf("Usage %s", $name));
-  $if @has_options_args($Cmd):
+  $if @has_options_args(Cmd):
     io::print(" [OPTIONS]");
   $endif
 
-  @print_required_args($Cmd);
+  @print_required_args(Cmd);
 
   $if $has_subcommands:
     io::print(" <COMMANDS>");
     io::printn("\n");
     io::printn("Commands:");
-    @print_subcommands($Cmd);
+    @print_subcommands(Cmd);
     io::printn();
   $else
     io::printn("\n");
   $endif
-  $if @has_options_args($Cmd):
+  $if @has_options_args(Cmd):
     io::printn("Options:");
-    @print_all_args($Cmd);
+    @print_all_args(Cmd);
     io::printn();
   $endif
-  libc::exit(0);
+  thread::exit(0);
 }
 
-macro print_short_about($Cmd) @private {
-  print_long_about($Cmd);
+fn void print_short_about() <Cmd> @private {
+  print_long_about{Cmd}();
 }
 
 macro @print_subcommands($Cmd) @private {
@@ -586,3 +581,164 @@ macro @get_maybe_inner_type($Type) {
   return $Type;
 }
 
+// macro parse($Cmd, String[] _args) {
+//   var args = _args[1..];
+//
+//   if (args.len == 0 && $Cmd::get_tag("seali:command").help_on_empty) {
+//     print_long_about($Cmd);
+//   }
+//
+//   List{String} args_with_values;
+//   args_with_values.init(mem);
+//   defer args_with_values.free();
+//
+//   $Cmd cmd;
+//
+//   // set the default value of all the field that have one
+//   $foreach $member : $Cmd::members :
+//     ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
+//     $if !$config.skip:
+//       $if $config.default_value.len > 0:
+//         args_with_values.push($member.name);
+//         do {
+//           $if $member.type.kind == ENUM:
+//             $if $config.default_value[0] == '"' ||| !$defined($Typefrom($member.type).$eval($config.default_value)):
+//               $error @sprintf("The default value of an enum member must be the member's description without the type (found %s).", $config.default_value);
+//             $endif
+//             var val = $Typefrom($member.type).$eval($config.default_value);
+//           $else
+//             var val = ($Typefrom($member.type)) utils::@expand_val($config.default_value);
+//           $endif
+//           $if $defined(val!):
+//             if (catch val) {
+//               val!;
+//               return cmd;
+//             }
+//           $endif
+//           cmd.$eval($member.name) = val;
+//         };
+//       $endif
+//       $if @is_maybe_type($member.type):
+//         args_with_values.push($member.name);
+//       $endif
+//     $endif
+//   $endforeach
+//
+//   List{String} got_value;
+//   got_value.init(mem);
+//   defer got_value.free();
+//
+//   int i = 0;
+//   while (i < args.len) {
+//     String name;
+//     if (try eq_idx = args[i].index_of("=")) {
+//       name = args[i][..eq_idx - 1];
+//       args[i] = args[i][eq_idx + 1..args[i].len-1];
+//     }
+//     $foreach $member : $Cmd::members:
+//       ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
+//       $if !$config.skip:
+//         if (args[i] == "--help") print_long_about($Cmd);
+//         if (args[i] == "-h") print_short_about($Cmd);
+//
+//         if (name.len > 0) {
+//           if (@arg_name_matches($config, $member, name) && !got_value.contains($member.name)) {
+//             args_with_values.push($member.name);
+//             got_value.push($member.name);
+//             i += @arg_set_value(cmd, $member, $config, args, i)!;
+//             continue;
+//           }
+//         } else if (@arg_name_matches($config, $member, args[i]) && !got_value.contains($member.name)) {
+//           args_with_values.push($member.name);
+//           got_value.push($member.name);
+//           $if !($config.@is_unamed() ||| $member.type == bool):
+//             i++;
+//           $endif
+//           i += @arg_set_value(cmd, $member, $config, args, i)!;
+//           continue;
+//         }
+//       $endif
+//     $endforeach
+//
+//     io::eprintfn("Unknown option '%s'\n", args[i]);
+//     libc::exit(-1);
+//   }
+//
+//   var has_missing = false;
+//   // check that each field has been initialized
+//   $foreach $member : $Cmd::members:
+//     ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
+//     $if !$config.skip:
+//       if (!args_with_values.contains($member.name)) {
+//         if (!has_missing) {
+//           io::eprint("Missing required option ");
+//         } else {
+//           io::eprint(", ");
+//         }
+//         var $name = @get_name($config);
+//         $if $name.len == 0:
+//           io::eprint(@sprintf("<%s>", @str_upper($member.name)));
+//         $else
+//           io::eprint($name);
+//         $endif
+//         has_missing = true;
+//       }
+//     $endif
+//   $endforeach
+//
+//   if (has_missing) {
+//     io::eprintn();
+//     libc::exit(-1);
+//   }
+//
+//   return cmd;
+// }
+
+// macro print_long_about($Cmd) @private {
+//   $if !$Cmd::has_tag("seali:command"):
+//     $error "Commands must be marked with the @Command tag";
+//   $endif
+//
+//   var $name = $Cmd::get_tag("seali:command").name;
+//
+//   $switch: 
+//     $case $Cmd::get_tag("seali:command").long_about.len != 0:
+//       io::printn($Cmd.get_tag("seali::command").long_about +++ "\n");
+//
+//     $case $Cmd::get_tag("seali:command").about.len != 0:
+//       io::printn($Cmd::get_tag("seali:command").about +++ "\n");
+//
+//   $endswitch
+//
+//   var $has_subcommands = false;
+//   $foreach $member : $Cmd::members :
+//     $if $member.has_tag("seali:arg"):
+//       $if $member.get_tag("seali:arg").is_subcommand:
+//         $has_subcommands = true;
+//       $endif
+//     $endif
+//   $endforeach
+//
+//   io::print(@sprintf("Usage %s", $name));
+//   $if @has_options_args($Cmd):
+//     io::print(" [OPTIONS]");
+//   $endif
+//
+//   @print_required_args($Cmd);
+//
+//   $if $has_subcommands:
+//     io::print(" <COMMANDS>");
+//     io::printn("\n");
+//     io::printn("Commands:");
+//     @print_subcommands($Cmd);
+//     io::printn();
+//   $else
+//     io::printn("\n");
+//   $endif
+//   $if @has_options_args($Cmd):
+//     io::printn("Options:");
+//     @print_all_args($Cmd);
+//     io::printn();
+//   $endif
+//   libc::exit(0);
+// }

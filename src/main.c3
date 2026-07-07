@@ -1,5 +1,7 @@
 module main @if($feature(SEALI_DEV));
 import seali;
+import derive;
+import std::io;
 
 enum LogLevel : (String name) {
   VERBOSE { "verbose" },
@@ -8,6 +10,8 @@ enum LogLevel : (String name) {
   WARN { "warn" },
   ERROR { "error" },
 }
+
+$expand(derive(EnumDesCli::name, seali));
 struct EnumDesCli @Command({.name = "t"}) {
   LogLevel log_level_description @Seali(arg(long, help = "Log level", default_value = VERBOSE));
   LogLevel log_level_ordinal @Seali(arg(long, help = "Log level", enum_as = ORDINAL));
@@ -17,6 +21,8 @@ struct EnumDesCli @Command({.name = "t"}) {
 
 
 fn void main(String[] args) {
-  EnumDesCli cli = seali::parse(EnumDesCli, args)!!;
+  EnumDesCli cli;
+  cli.parse(args)!!;
 
+  io::printn(cli);
 }
