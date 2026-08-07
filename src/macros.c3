@@ -303,7 +303,9 @@ macro @arg_to_value($Type, args, i, $config) @local {
       $endswitch
 
     $case $Type::has_tag("seali:command"):
-      return parse($Type, args[i - 1..]);
+      $Type sub;
+      impl_parse{$Type}(&sub, args[i - 1..])!;
+      return sub;
 
     // $default:
     //   $error "Unsupported type arg '" +++ $Type.nameof +++ "'";

@@ -12,3 +12,9 @@ macro seali(String $typename) @const {
   return @sprintf("fn void? %s.parse(&self, String[] args) => seali::impl_parse{%s}(self, args);\n", $typename, $typename);
 }
 
+module seali;
+
+macro @derive($Type, #what = ...) @const {
+  return @sprintf("fn void? %s.parse(&self, String[] args) => seali::impl_parse{%s}(self, args);\n", $Type::name, $Type::name);
+}
+
