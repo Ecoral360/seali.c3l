@@ -1,4 +1,4 @@
-# seali
+# seali 🌊
 
 A lightweight CLI library for C3 that makes writing command-line interfaces simple and declarative using macros and attributes.
 
@@ -12,7 +12,7 @@ A lightweight CLI library for C3 that makes writing command-line interfaces simp
 - **Subcommands** - Nest command structs for multi-command CLIs
 - **Positional arguments** - Fields without a flag name are matched positionally
 - **Enum arguments** - Match by constant name, ordinal, or an associated-value field
-- **Compact codegen** - `seali::@derive` emits one `parse` function per command instead of inlining the parser at each call site
+- **Compact codegen** - `seali::@derive` emits one `parse` function per command struct instead of inlining the parser at each call site
 
 ## Installation
 
@@ -63,7 +63,7 @@ fn int main(String[] args) {
 
 The `$expand(seali::@derive(Cli));` line generates `fn void? Cli.parse(&self, String[] args)` for
 the struct declared right below it. It must sit at file scope, and one is needed per top-level
-command struct.
+command struct (i.e. not needed for subcommands).
 
 ## Attribute Reference
 
@@ -93,7 +93,7 @@ All field configuration goes through the `@Seali(arg(...))` attribute. The `arg`
 | `long` | Auto-generate long flag from the field name | `arg(long)` |
 | `long = "name"` | Custom long flag | `arg(long = "output")` |
 | `default_value = val` | Makes the field optional with a fallback | `arg(default_value = 4)` |
-| `enum_as = mode` | How an enum field matches its argument — see [Enum arguments](#enum-arguments) | `arg(enum_as = ORDINAL)` |
+| `enum_as = mode` | How an enum field matches its argument - see [Enum arguments](#enum-arguments) | `arg(enum_as = ORDINAL)` |
 | `help = "text"` | Description shown in `--help` output | `arg(help = "Input file")` |
 | `subcommand` | Marks a `Maybe{SubCmd}` field as a subcommand | `arg(subcommand)` |
 | `skip` | Exclude this field from CLI parsing entirely | `arg(skip)` |
@@ -210,9 +210,9 @@ Enum-typed fields are supported natively. `enum_as` picks how the argument strin
 
 | `enum_as` | Matches on | Example |
 |-----------|------------|---------|
-| omitted, or `DESCRIPTION` | the enum constant name, case-insensitive | `--level info` → `INFO` |
-| `ORDINAL` | the constant's ordinal | `--level 2` → `INFO` |
-| a lowercase identifier | that associated-value field | `enum_as = name` + `--level information` → `INFO` |
+| omitted, or `DESCRIPTION` | the enum constant name, case-insensitive | `--level info` -> `INFO` |
+| `ORDINAL` | the constant's ordinal | `--level 2` -> `INFO` |
+| a lowercase identifier | that associated-value field | `enum_as = name` + `--level information` -> `INFO` |
 
 ```c3
 enum LogLevel : (String name) {
@@ -232,7 +232,7 @@ struct Cli @Command({.name = "myapp"})
 }
 ```
 
-An enum `default_value` is written **bare, without the type prefix** — `default_value = WARN`, not
+An enum `default_value` is written **bare, without the type prefix** - `default_value = WARN`, not
 `default_value = LogLevel.WARN`. Anything else is a compile-time error.
 
 The accepted values are listed automatically in the help output:
@@ -272,7 +272,7 @@ cli.parse(args)!!;
 
 It handles `-h`/`--help`, validates required fields, and exits the process on an unknown or missing
 option. It returns an optional for value-level failures (a malformed number, an unknown enum value)
-— use `!!` to panic or `!` to propagate.
+- use `!!` to panic or `!` to propagate.
 
 **Supported field types:** `String`, `int`, `uint`, `char`, `bool`, any enum, `Maybe{T}`, and any
 struct tagged with `@Command` (for subcommands).

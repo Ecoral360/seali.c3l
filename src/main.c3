@@ -27,24 +27,25 @@ struct CliArgs @Command({ .name = "c3_ls" })
 	Maybe{String} compiler_path @Seali(arg(long, help = "Path to C3 compiler binary"));
 	Maybe{String} log_path      @Seali(arg(long, help = "Path to log file"));
 	Maybe{String} cache_path    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path2    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path3    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path4    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path5    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path6    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path7    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path8    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path9    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path10    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path11    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path12    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path13    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path14    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path15    @Seali(arg(long, help = "Override where the cache files are stored"));
-	Maybe{String} cache_path16    @Seali(arg(long, help = "Override where the cache files are stored"));
-	LogLevel log_level        @Seali(arg(long, help = "log level", default_value = ERROR));
+	Maybe{String} cache_path2   @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path3   @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path4   @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path5   @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path6   @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path7   @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path8   @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path9   @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path10  @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path11  @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path12  @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path13  @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path14  @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path15  @Seali(arg(long, help = "Override where the cache files are stored"));
+	Maybe{String} cache_path16  @Seali(arg(long, help = "Override where the cache files are stored"));
+	LogLevel log_level          @Seali(arg(long, help = "log level", default_value = ERROR));
 	uint diagnostics_delay      @Seali(arg(short, long, help = "delay"));
 	bool send_crash_reports     @Seali(arg(long, help = "send crash reports", default_value = false));
+  String hello                @Seali(arg(skip));
 }
 
 
