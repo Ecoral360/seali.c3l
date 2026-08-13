@@ -135,7 +135,7 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
               cmd.$eval($member.name) = val;
             };
 
-          $case !@is_maybe_type($member.type):
+          $case !@is_maybe_type($member.type) &&& $member.type != bool:
             var $name = @get_name($config);
             missing.push($name.len == 0 ??? @sprintf("<%s>", @str_upper($member.name)) : $name);
         $endswitch
