@@ -86,7 +86,7 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
       name = args[i][..eq_idx - 1];
       args[i] = args[i][eq_idx + 1..args[i].len-1];
       eq_syntax = true;
-    } else if (args[i].len > 2 && args[i][0] == '-' && args[i][1] != '-') {
+    } else if (args[i].len > 1 && args[i][0] == '-' && args[i][1] != '-') {
       name = args[i][..1];
       args[i] = args[i][2..args[i].len-1];
       eq_syntax = true;
