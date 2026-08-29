@@ -648,6 +648,20 @@ fn void test_help_on_empty_returns_fault() @test {
     test::@error(cli.tparse(args), seali::HELP_PRINTED);
 }
 
+fn void test_invalid_enum_field_returns_fault() @test {
+    // lookup_field's NOT_FOUND is reported as seali's own INVALID_ENUM_VALUE,
+    // after printing the value and the accepted set.
+    String[] args = {"prog", "--log-level", "nope"};
+    EnumLookupCli cli;
+    test::@error(cli.tparse(args), seali::INVALID_ENUM_VALUE);
+}
+
+fn void test_invalid_enum_field_is_not_a_prefix_match() @test {
+    String[] args = {"prog", "--log-level", "info"};
+    EnumLookupCli cli;
+    test::@error(cli.tparse(args), seali::INVALID_ENUM_VALUE);
+}
+
 fn void test_invalid_enum_description_returns_fault() @test {
     String[] args = {"prog", "--log-level", "nope"};
     EnumDesCli cli;

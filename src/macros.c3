@@ -297,16 +297,17 @@ macro @arg_to_value(allocator, $Type, args, i, $config) @local {
       String arg = args[i];
       $switch $config.enum_as.type:
         $case DESCRIPTION:
-          arg = arg.to_upper_tcopy();
+          String upper = arg.to_upper_tcopy();
           int found = -1;
           foreach(j, v : $Type::names) {
-            if (v == arg) {
+            if (v == upper) {
               found = (int) j;
               break;
             }
           }
 
           if (found == -1) {
+            @print_invalid_enum_value($Type, $config, arg);
             return INVALID_ENUM_VALUE~;
           }
           return $Type::values[found];
@@ -315,7 +316,15 @@ macro @arg_to_value(allocator, $Type, args, i, $config) @local {
           return $Type::from_ordinal(arg.to_int()!);
 
         $default:
-          return $Type::lookup_field($eval($config.enum_as.field), arg);
+          $Type? looked_up = $Type::lookup_field($eval($config.enum_as.field), arg);
+          if (catch f = looked_up) {
+            if (f == NOT_FOUND) {
+              @print_invalid_enum_value($Type, $config, arg);
+              return INVALID_ENUM_VALUE~;
+            }
+            return f~;
+          }
+          return looked_up;
       $endswitch
 
     $case $Type::has_tag("seali:command"):
@@ -503,6 +512,45 @@ fn void print_all_args() <Cmd> @private {
   $endforeach
 }
 
+<*
+  The values a user may pass for an enum arg, as they must be typed on the
+  command line. Shared by the help output and the invalid-value error.
+*>
+macro String @enum_values_string($Type, $config, String $sep) @private @const {
+  var $s = "";
+  $switch $config.enum_as.type:
+    $case DESCRIPTION:
+      $foreach $i, $name : $Type::names:
+        $if $i != 0:
+          $s +++= $sep;
+        $endif
+        $s +++= @str_lower($name);
+      $endforeach
+
+    $case ORDINAL:
+      $s = @sprintf("0..%s", $Type::values.len - 1);
+
+    $default:
+      $foreach $i, $value : $Type::values:
+        $if $i != 0:
+          $s +++= $sep;
+        $endif
+        $s +++= $value.$eval($config.enum_as.field);
+      $endforeach
+  $endswitch
+  return $s;
+}
+
+macro @print_invalid_enum_value($Type, $config, String value) @private {
+  var $valid = @enum_values_string($Type, $config, ", ");
+  var $name = @get_name($config);
+  $if $name.len > 0:
+    io::eprintfn("Invalid value '%s' for %s: expected one of %s", value, $name, $valid);
+  $else
+    io::eprintfn("Invalid value '%s': expected one of %s", value, $valid);
+  $endif
+}
+
 macro @arg_value_to_string($arg, $config) {
   $switch:
     $case $arg.type == bool:
@@ -519,28 +567,7 @@ macro @print_arg_desc($arg, ArgConfig $config) {
   $endif
 
   $if $arg.type.kind == ENUM:
-    String $s = "";
-    $switch $config.enum_as.type:
-      $case DESCRIPTION:
-        $foreach $i, $name : $arg.type.names:
-          $if $i != 0:
-            $s +++= " | ";
-          $endif
-          $s +++= @str_lower($name);
-        $endforeach
-
-      $case ORDINAL:
-        $s = @sprintf("0..%s", $arg.type.values.len - 1);
-
-      $default:
-        $foreach $i, $value : $arg.type.values:
-          $if $i != 0:
-            $s +++= " | ";
-          $endif
-          $s +++= @str_lower($value.$eval($config.enum_as.field));
-        $endforeach
-    $endswitch
-    io::printf(@sprintf(" {values: %s}", $s));
+    io::printf(@sprintf(" {values: %s}", @enum_values_string($Typefrom($arg.type), $config, " | ")));
   $endif
 
   $if $config.default_value.len > 0:
