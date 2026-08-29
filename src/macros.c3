@@ -56,7 +56,7 @@ struct ArgConfig {
   EnumVal enum_as;
 }
 
-faultdef INVALID_ENUM_VALUE;
+faultdef INVALID_ENUM_VALUE, HELP_PRINTED, UNKNOWN_OPTION, MISSING_REQUIRED_OPTION;
 
 macro ArgConfig.@is_unamed($self) {
   return $self.longn.len == 0 &&& $self.shortn == 0;
@@ -66,7 +66,7 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
   String[] args = _args[1..];
 
   if (args.len == 0 && Cmd::get_tag("seali:command").help_on_empty) {
-    print_long_about{Cmd}();
+    print_long_about{Cmd}()!;
   }
 
   List{String} args_with_values;
@@ -77,14 +77,18 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
 
   int i = 0;
   while (i < args.len) {
-    if (args[i] == "--help") print_long_about{Cmd}();
-    if (args[i] == "-h") print_short_about{Cmd}();
+    if (args[i] == "--help") print_long_about{Cmd}()!;
+    if (args[i] == "-h") print_short_about{Cmd}()!;
 
     String name = args[i];
     bool eq_syntax = false;
     if (try eq_idx = args[i].index_of("=")) {
       name = args[i][..eq_idx - 1];
       args[i] = args[i][eq_idx + 1..args[i].len-1];
+      eq_syntax = true;
+    } else if (args[i].len > 2 && args[i][0] == '-' && args[i][1] != '-') {
+      name = args[i][..1];
+      args[i] = args[i][2..args[i].len-1];
       eq_syntax = true;
     }
 
@@ -104,7 +108,7 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
     $endforeach
 
     io::eprintfn("Unknown option '%s'\n", args[i]);
-    thread::exit(-1);
+    return UNKNOWN_OPTION~;
   }
 
   List{String} missing;
@@ -145,7 +149,7 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
 
   if (missing.len() > 0) {
     io::eprintfn("Missing required option: %s", string::tjoin(missing.to_tarray(), ", "));
-    thread::exit(-1);
+    return MISSING_REQUIRED_OPTION~;
   }
 }
 
@@ -312,7 +316,7 @@ macro @arg_to_value($Type, args, i, $config) @local {
   $endswitch
 }
 
-fn void print_long_about() <Cmd> @private {
+fn void? print_long_about() <Cmd> @private {
   $if !Cmd::has_tag("seali:command"):
     $error "Commands must be marked with the @Command tag";
   $endif
@@ -358,11 +362,12 @@ fn void print_long_about() <Cmd> @private {
     print_all_args{Cmd}();
     io::printn();
   $endif
-  thread::exit(0);
+
+  return HELP_PRINTED~;
 }
 
-fn void print_short_about() <Cmd> @private {
-  print_long_about{Cmd}();
+fn void? print_short_about() <Cmd> @private {
+  return print_long_about{Cmd}();
 }
 
 macro @print_subcommands($Cmd) @private {

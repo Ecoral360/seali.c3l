@@ -2,6 +2,7 @@ module seali_test;
 import seali;
 import std::io;
 import std::collections::maybe;
+import std::core::test;
 
 // ── Structs ────────────────────────────────────────────────────────────────
 
@@ -119,6 +120,17 @@ struct PosAndFlagCli @Command({.name = "t"}) {
 $expand(seali::@derive(ShortCustomAndLongCli));
 struct ShortCustomAndLongCli @Command({.name = "t"}) {
     String output @Seali(arg(short = 'o', long = "out", help = "output"));
+}
+
+$expand(seali::@derive(TwoRequiredCli));
+struct TwoRequiredCli @Command({.name = "t"}) {
+    String first  @Seali(arg(long, help = "first"));
+    String second @Seali(arg(long, help = "second"));
+}
+
+$expand(seali::@derive(HelpOnEmptyCli));
+struct HelpOnEmptyCli @Command({.name = "t", .help_on_empty = true}) {
+    Maybe{String} name @Seali(arg(long, help = "name"));
 }
 
 // ── String flags ───────────────────────────────────────────────────────────
@@ -504,8 +516,7 @@ fn void test_derive_generates_parse_method() @test {
 fn void test_derive_parse_propagates_error() @test {
     String[] args = {"prog", "--log-level", "nope"};
     EnumDesCli cli;
-    fault f = @catch(cli.parse(args));
-    assert(f == seali::INVALID_ENUM_VALUE);
+    test::@error(cli.parse(args), seali::INVALID_ENUM_VALUE);
 }
 
 fn void test_derive_reparse_same_struct() @test {
@@ -517,4 +528,121 @@ fn void test_derive_reparse_same_struct() @test {
     String[] second = {"prog", "--log-level", "error"};
     cli.parse(second)!!;
     assert(cli.log_level == ERROR);
+}
+
+// ── Faults returned by parse ───────────────────────────────────────────────
+// `parse` reports every failure as a fault instead of terminating the
+// program, so each of these keeps running after the call returns.
+
+fn void test_unknown_long_option_returns_fault() @test {
+    String[] args = {"prog", "--nope", "x"};
+    StringLongCli cli;
+    test::@error(cli.parse(args), seali::UNKNOWN_OPTION);
+}
+
+fn void test_unknown_short_option_returns_fault() @test {
+    String[] args = {"prog", "-z"};
+    StringLongCli cli;
+    test::@error(cli.parse(args), seali::UNKNOWN_OPTION);
+}
+
+fn void test_unknown_option_with_eq_returns_fault() @test {
+    String[] args = {"prog", "--nope=1"};
+    StringLongCli cli;
+    test::@error(cli.parse(args), seali::UNKNOWN_OPTION);
+}
+
+fn void test_missing_required_long_returns_fault() @test {
+    String[] args = {"prog"};
+    StringLongCli cli;
+    test::@error(cli.parse(args), seali::MISSING_REQUIRED_OPTION);
+}
+
+fn void test_missing_required_positional_returns_fault() @test {
+    String[] args = {"prog"};
+    PositionalCli cli;
+    test::@error(cli.parse(args), seali::MISSING_REQUIRED_OPTION);
+}
+
+fn void test_missing_one_of_two_required_returns_fault() @test {
+    String[] args = {"prog", "--first", "a"};
+    TwoRequiredCli cli;
+    test::@error(cli.parse(args), seali::MISSING_REQUIRED_OPTION);
+}
+
+fn void test_missing_required_in_subcommand_returns_fault() @test {
+    String[] args = {"prog", "install"};
+    SubCli cli;
+    test::@error(cli.parse(args), seali::MISSING_REQUIRED_OPTION);
+}
+
+fn void test_unknown_option_in_subcommand_returns_fault() @test {
+    String[] args = {"prog", "fetch", "--nope"};
+    SubCli cli;
+    test::@error(cli.parse(args), seali::UNKNOWN_OPTION);
+}
+
+fn void test_help_long_returns_fault() @test {
+    String[] args = {"prog", "--help"};
+    StringLongCli cli;
+    test::@error(cli.parse(args), seali::HELP_PRINTED);
+}
+
+fn void test_help_short_returns_fault() @test {
+    String[] args = {"prog", "-h"};
+    StringLongCli cli;
+    test::@error(cli.parse(args), seali::HELP_PRINTED);
+}
+
+fn void test_help_wins_over_missing_required() @test {
+    String[] args = {"prog", "--help"};
+    TwoRequiredCli cli;
+    test::@error(cli.parse(args), seali::HELP_PRINTED);
+}
+
+fn void test_help_on_empty_returns_fault() @test {
+    String[] args = {"prog"};
+    HelpOnEmptyCli cli;
+    test::@error(cli.parse(args), seali::HELP_PRINTED);
+}
+
+fn void test_invalid_enum_description_returns_fault() @test {
+    String[] args = {"prog", "--log-level", "nope"};
+    EnumDesCli cli;
+    test::@error(cli.parse(args), seali::INVALID_ENUM_VALUE);
+}
+
+fn void test_non_numeric_enum_ordinal_returns_fault() @test {
+    String[] args = {"prog", "--log-level", "nope"};
+    EnumOrdCli cli;
+    test::@error(cli.parse(args), string::MALFORMED_INTEGER);
+}
+
+fn void test_non_numeric_uint_returns_fault() @test {
+    String[] args = {"prog", "--count", "abc"};
+    UintCli cli;
+    test::@error(cli.parse(args), string::MALFORMED_INTEGER);
+}
+
+fn void test_negative_uint_returns_fault() @test {
+    String[] args = {"prog", "--count", "-5"};
+    UintCli cli;
+    test::@error(cli.parse(args), string::NEGATIVE_VALUE);
+}
+
+fn void test_parse_returns_instead_of_terminating() @test {
+    StringLongCli cli;
+
+    String[] bad = {"prog", "--nope"};
+    bool got_fault = false;
+    if (catch f = cli.parse(bad)) {
+        got_fault = true;
+        assert(f == seali::UNKNOWN_OPTION);
+    }
+    assert(got_fault);
+
+    // execution continues: the same struct still parses afterwards
+    String[] good = {"prog", "--name", "Alice"};
+    cli.parse(good)!!;
+    assert(cli.name == "Alice");
 }
