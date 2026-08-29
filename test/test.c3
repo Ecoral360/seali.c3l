@@ -24,7 +24,7 @@ struct StringShortCustomCli @Command({.name = "t"}) {
 
 $expand(seali::@derive(UintCli));
 struct UintCli @Command({.name = "t"}) {
-    uint count @Seali(arg(long, help = "count"));
+    uint count @Seali(arg(short, long, help = "count"));
 }
 
 $expand(seali::@derive(IntCli));
@@ -149,6 +149,13 @@ struct ListUintCli @Command({.name = "t"}) {
 $expand(seali::@derive(ListMixedCli));
 struct ListMixedCli @Command({.name = "t"}) {
     List{String} tag     @Seali(arg(long, help = "tags"));
+    String       name    @Seali(arg(long, help = "name"));
+    bool         verbose @Seali(arg(long, default_value = false, help = "verbose"));
+}
+
+$expand(seali::@derive(ListIntMixedCli));
+struct ListIntMixedCli @Command({.name = "t"}) {
+    List{int} tag     @Seali(arg(long, help = "tags"));
     String       name    @Seali(arg(long, help = "name"));
     bool         verbose @Seali(arg(long, default_value = false, help = "verbose"));
 }
@@ -665,6 +672,13 @@ fn void test_negative_uint_returns_fault() @test {
     test::@error(cli.tparse(args), string::NEGATIVE_VALUE);
 }
 
+fn void test_short_syntax_int_works() @test {
+    String[] args = {"prog", "-c5"};
+    UintCli cli;
+    cli.tparse(args)!!;
+    assert(cli.count == 5);
+}
+
 fn void test_parse_returns_instead_of_terminating() @test {
     StringLongCli cli;
 
@@ -758,6 +772,17 @@ fn void test_list_interleaved_with_other_flags() @test {
     assert(cli.tag.len() == 2);
     assert(cli.tag[0] == "a");
     assert(cli.tag[1] == "b");
+    assert(cli.name == "Alice");
+    assert(cli.verbose == true);
+}
+
+fn void test_int_list_interleaved_with_other_flags() @test {
+    String[] args = {"prog", "--tag", "1", "--name", "Alice", "--tag", "12", "--verbose"};
+    ListIntMixedCli cli;
+    cli.tparse(args)!!;
+    assert(cli.tag.len() == 2);
+    assert(cli.tag[0] == 1);
+    assert(cli.tag[1] == 12);
     assert(cli.name == "Alice");
     assert(cli.verbose == true);
 }
