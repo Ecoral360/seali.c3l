@@ -62,7 +62,7 @@ macro ArgConfig.@is_unamed($self) {
   return $self.longn.len == 0 &&& $self.shortn == 0;
 }
 
-fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
+fn void? impl_parse(Allocator allocator, Cmd* cmd, String[] _args) <Cmd> => @pool() {
   String[] args = _args[1..];
 
   if (args.len == 0 && Cmd::get_tag("seali:command").help_on_empty) {
@@ -86,7 +86,7 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
       name = args[i][..eq_idx - 1];
       args[i] = args[i][eq_idx + 1..args[i].len-1];
       eq_syntax = true;
-    } else if (args[i].len > 1 && args[i][0] == '-' && args[i][1] != '-') {
+    } else if (args[i].len > 2 && args[i][0] == '-' && args[i][1] != '-') {
       name = args[i][..1];
       args[i] = args[i][2..args[i].len-1];
       eq_syntax = true;
@@ -95,13 +95,14 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
     $foreach $member : Cmd::members:
       ArgConfig $config = @setup_config(Cmd::get_tag("seali:command"), $member);
       $if !$config.skip:
-        if (@arg_name_matches($config, $member, name) && !got_value.contains($member.name)) {
+        var $repeatable = $member.type.is_generic(List);
+        if (@arg_name_matches($config, $member, name) && ($repeatable || !got_value.contains($member.name))) {
           args_with_values.push($member.name);
           got_value.push($member.name);
           $if !($config.@is_unamed() ||| $member.type == bool):
             if (!eq_syntax) i++;
           $endif
-          i += @arg_set_value(cmd, $member, $config, args, i)!;
+          i += @arg_set_value(allocator, cmd, $member, $config, args, i)!;
           continue;
         }
       $endif
@@ -139,7 +140,7 @@ fn void? impl_parse(Cmd* cmd, String[] _args) <Cmd> => @pool() {
               cmd.$eval($member.name) = val;
             };
 
-          $case !@is_maybe_type($member.type) &&& $member.type != bool:
+          $case !@is_maybe_type($member.type) &&& $member.type != bool &&& !$member.type.is_generic(List):
             var $name = @get_name($config);
             missing.push($name.len == 0 ??? @sprintf("<%s>", @str_upper($member.name)) : $name);
         $endswitch
@@ -229,16 +230,23 @@ macro bool @arg_name_matches(ArgConfig $config, $member, value) {
   $endif
 }
 
-// returns the number of consummed values
-macro int? @arg_set_value(#cmd, $arg, $config, args, i) {
-  var val = @arg_to_value($arg.type, args, i, $config);
+<*
+  @returns "the number of consummed values"
+*>
+macro int? @arg_set_value(allocator, #cmd, $arg, $config, args, i) {
+  var val = @arg_to_value(allocator, $arg.type, args, i, $config);
   $if $defined(val!):
     if (catch val) {
       val!;
       return 0;
     }
   $endif
-  #cmd.$eval($arg.name) = val;
+  $if $arg.type.is_generic(List):
+    if (!#cmd.$eval($arg.name).is_initialized()) #cmd.$eval($arg.name).init(allocator);
+    #cmd.$eval($arg.name).push(val);
+  $else
+    #cmd.$eval($arg.name) = val;
+  $endif
   return arg_type_size{$arg.type}(args.len);
 }
 
@@ -256,13 +264,17 @@ fn int arg_type_size(int max) <Type> @local {
   $endswitch
 }
 
-macro @arg_to_value($Type, args, i, $config) @local {
+macro @arg_to_value(allocator, $Type, args, i, $config) @local {
   $if @is_maybe_type($Type):
     $Type $t;
-    return maybe::value{$Typeof($t.value)}(@arg_to_value($Typeof($t.value), args, i, $config));
+    return maybe::value{$Typeof($t.value)}(@arg_to_value(allocator, $Typeof($t.value), args, i, $config));
   $endif
 
+
   $switch:
+    $case $Type::is_generic(List):
+      return @arg_to_value(allocator, $Type::generic_args[0], args, i, $config);
+
     $case $Type == bool:
       return true;
 
@@ -308,7 +320,7 @@ macro @arg_to_value($Type, args, i, $config) @local {
 
     $case $Type::has_tag("seali:command"):
       $Type sub;
-      impl_parse{$Type}(&sub, args[i - 1..])!;
+      impl_parse{$Type}(allocator, &sub, args[i - 1..])!;
       return sub;
 
     // $default:

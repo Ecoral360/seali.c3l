@@ -52,7 +52,7 @@ struct CliArgs @Command({ .name = "c3_ls" })
 
 fn void main(String[] args) {
   CliArgs cli;
-  cli.parse(args)!!;
+  cli.tparse(args)!!;
 
   io::printn(cli);
 }

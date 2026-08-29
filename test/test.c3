@@ -2,6 +2,7 @@ module seali_test;
 import seali;
 import std::io;
 import std::collections::maybe;
+import std::collections::list;
 import std::core::test;
 
 // ── Structs ────────────────────────────────────────────────────────────────
@@ -133,26 +134,45 @@ struct HelpOnEmptyCli @Command({.name = "t", .help_on_empty = true}) {
     Maybe{String} name @Seali(arg(long, help = "name"));
 }
 
+// List{T} members collect one entry per occurrence. The caller owns the list's
+// allocator, so every test below inits it before calling parse.
+$expand(seali::@derive(ListStringCli));
+struct ListStringCli @Command({.name = "t"}) {
+    List{String} tag @Seali(arg(short, long, help = "tags"));
+}
+
+$expand(seali::@derive(ListUintCli));
+struct ListUintCli @Command({.name = "t"}) {
+    List{uint} num @Seali(arg(long, help = "nums"));
+}
+
+$expand(seali::@derive(ListMixedCli));
+struct ListMixedCli @Command({.name = "t"}) {
+    List{String} tag     @Seali(arg(long, help = "tags"));
+    String       name    @Seali(arg(long, help = "name"));
+    bool         verbose @Seali(arg(long, default_value = false, help = "verbose"));
+}
+
 // ── String flags ───────────────────────────────────────────────────────────
 
 fn void test_string_long_flag() @test {
     String[] args = {"prog", "--name", "Alice"};
     StringLongCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "Alice");
 }
 
 fn void test_string_short_auto_flag() @test {
     String[] args = {"prog", "-n", "Bob"};
     StringShortAutoCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "Bob");
 }
 
 fn void test_string_short_custom_flag() @test {
     String[] args = {"prog", "-x", "Charlie"};
     StringShortCustomCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "Charlie");
 }
 
@@ -161,28 +181,28 @@ fn void test_string_short_custom_flag() @test {
 fn void test_uint_flag() @test {
     String[] args = {"prog", "--count", "42"};
     UintCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.count == 42);
 }
 
 fn void test_uint_flag_zero() @test {
     String[] args = {"prog", "--count", "0"};
     UintCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.count == 0);
 }
 
 fn void test_uint_flag_large() @test {
     String[] args = {"prog", "--count", "65535"};
     UintCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.count == 65535);
 }
 
 fn void test_int_positive() @test {
     String[] args = {"prog", "--offset", "99"};
     IntCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.offset == 99);
 }
 
@@ -191,28 +211,28 @@ fn void test_int_positive() @test {
 fn void test_bool_long_flag_sets_true() @test {
     String[] args = {"prog", "--verbose"};
     BoolLongCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.verbose == true);
 }
 
 fn void test_bool_long_flag_absent_uses_default() @test {
     String[] args = {"prog"};
     BoolLongCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.verbose == false);
 }
 
 fn void test_bool_short_flag_sets_true() @test {
     String[] args = {"prog", "-V"};
     BoolShortCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.verbose == true);
 }
 
 fn void test_bool_short_flag_absent_uses_default() @test {
     String[] args = {"prog"};
     BoolShortCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.verbose == false);
 }
 
@@ -221,7 +241,7 @@ fn void test_bool_short_flag_absent_uses_default() @test {
 fn void test_all_defaults_applied() @test {
     String[] args = {"prog"};
     DefaultsCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.output == "out.txt");
     assert(cli.threads == 4);
 }
@@ -229,7 +249,7 @@ fn void test_all_defaults_applied() @test {
 fn void test_all_defaults_overridden() @test {
     String[] args = {"prog", "--output", "custom.txt", "--threads", "8"};
     DefaultsCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.output == "custom.txt");
     assert(cli.threads == 8);
 }
@@ -237,7 +257,7 @@ fn void test_all_defaults_overridden() @test {
 fn void test_partial_defaults() @test {
     String[] args = {"prog", "--threads", "2"};
     DefaultsCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.output == "out.txt");
     assert(cli.threads == 2);
 }
@@ -247,28 +267,28 @@ fn void test_partial_defaults() @test {
 fn void test_maybe_string_present() @test {
     String[] args = {"prog", "--output", "file.txt"};
     MaybeStringCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert((cli.output.get() ?? "") == "file.txt");
 }
 
 fn void test_maybe_string_absent() @test {
     String[] args = {"prog"};
     MaybeStringCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert((cli.output.get() ?? "ABSENT") == "ABSENT");
 }
 
 fn void test_maybe_uint_present() @test {
     String[] args = {"prog", "--count", "7"};
     MaybeUintCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert((cli.count.get() ?? 0) == 7);
 }
 
 fn void test_maybe_uint_absent() @test {
     String[] args = {"prog"};
     MaybeUintCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert((cli.count.get() ?? 999) == 999);
 }
 
@@ -277,14 +297,14 @@ fn void test_maybe_uint_absent() @test {
 fn void test_positional_arg() @test {
     String[] args = {"prog", "myfile.txt"};
     PositionalCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.input == "myfile.txt");
 }
 
 fn void test_positional_with_flag_before() @test {
     String[] args = {"prog", "--flag", "flagval", "posval"};
     PosAndFlagCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.flag == "flagval");
     assert(cli.positional == "posval");
 }
@@ -292,7 +312,7 @@ fn void test_positional_with_flag_before() @test {
 fn void test_positional_with_flag_after() @test {
     String[] args = {"prog", "posval", "--flag", "flagval"};
     PosAndFlagCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.flag == "flagval");
     assert(cli.positional == "posval");
 }
@@ -300,7 +320,7 @@ fn void test_positional_with_flag_after() @test {
 fn void test_positional_flag_uses_default() @test {
     String[] args = {"prog", "posval"};
     PosAndFlagCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.flag == "default");
     assert(cli.positional == "posval");
 }
@@ -310,14 +330,14 @@ fn void test_positional_flag_uses_default() @test {
 fn void test_kebab_case_underscore_to_dash() @test {
     String[] args = {"prog", "--input-file", "test.txt"};
     KebabCaseCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.input_file == "test.txt");
 }
 
 fn void test_verbatim_preserves_underscores() @test {
     String[] args = {"prog", "--input_file", "test.txt"};
     VerbatimCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.input_file == "test.txt");
 }
 
@@ -326,48 +346,63 @@ fn void test_verbatim_preserves_underscores() @test {
 fn void test_both_flags_used_via_long() @test {
     String[] args = {"prog", "--name", "Alice"};
     ShortAndLongCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "Alice");
 }
 
 fn void test_both_flags_used_via_long_eq() @test {
     String[] args = {"prog", "--name=Alice"};
     ShortAndLongCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "Alice");
 }
 
 fn void test_both_flags_used_via_short() @test {
     String[] args = {"prog", "-n", "Bob"};
     ShortAndLongCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "Bob");
 }
 fn void test_both_flags_used_via_short_eq() @test {
     String[] args = {"prog", "-n=Bob"};
     ShortAndLongCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "Bob");
+}
+
+fn void test_short_flag_with_attached_value() @test {
+    String[] args = {"prog", "-nBob"};
+    StringShortAutoCli cli;
+    cli.tparse(args)!!;
+    assert(cli.name == "Bob");
+}
+
+fn void test_short_flag_with_attached_numeric_value() @test {
+    String[] args = {"prog", "-n", "World", "-c5"};
+    MultiCli cli;
+    cli.tparse(args)!!;
+    assert(cli.name == "World");
+    assert(cli.count == 5);
 }
 
 fn void test_custom_short_and_long_via_short() @test {
     String[] args = {"prog", "-o", "result.txt"};
     ShortCustomAndLongCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.output == "result.txt");
 }
 
 fn void test_custom_short_and_long_via_long() @test {
     String[] args = {"prog", "--out", "result.txt"};
     ShortCustomAndLongCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.output == "result.txt");
 }
 
 fn void test_custom_long_name() @test {
     String[] args = {"prog", "--out", "result.txt"};
     CustomLongCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.output == "result.txt");
 }
 
@@ -376,7 +411,7 @@ fn void test_custom_long_name() @test {
 fn void test_skip_field_ignored_in_parse() @test {
     String[] args = {"prog", "--name", "Alice"};
     SkipCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "Alice");
     assert(cli.internal == 0);
 }
@@ -386,7 +421,7 @@ fn void test_skip_field_ignored_in_parse() @test {
 fn void test_subcommand_present_with_positional_arg() @test {
     String[] args = {"prog", "install", "mylib"};
     SubCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     SubInstall install = cli.install.get()!!;
     assert(install.name == "mylib");
 }
@@ -394,7 +429,7 @@ fn void test_subcommand_present_with_positional_arg() @test {
 fn void test_subcommand_present_with_flag_arg() @test {
     String[] args = {"prog", "fetch", "--url", "https://example.com"};
     SubCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     SubFetch f = cli.fetch.get()!!;
     assert(f.url == "https://example.com");
 }
@@ -402,7 +437,7 @@ fn void test_subcommand_present_with_flag_arg() @test {
 fn void test_subcommand_absent() @test {
     String[] args = {"prog"};
     SubCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     bool install_present = false;
     if (try cli.install.get()) { install_present = true; }
     assert(!install_present);
@@ -414,7 +449,7 @@ fn void test_subcommand_absent() @test {
 fn void test_second_subcommand_absent_when_first_used() @test {
     String[] args = {"prog", "install", "lib"};
     SubCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     bool fetch_present = false;
     if (try cli.fetch.get()) { fetch_present = true; }
     assert(!fetch_present);
@@ -425,7 +460,7 @@ fn void test_second_subcommand_absent_when_first_used() @test {
 fn void test_multi_all_flags_provided() @test {
     String[] args = {"prog", "--name", "World", "--count", "3", "-V"};
     MultiCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "World");
     assert(cli.count == 3);
     assert(cli.verbose == true);
@@ -434,7 +469,7 @@ fn void test_multi_all_flags_provided() @test {
 fn void test_multi_only_required_flag_uses_defaults() @test {
     String[] args = {"prog", "--name", "World"};
     MultiCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "World");
     assert(cli.count == 1);
     assert(cli.verbose == false);
@@ -443,7 +478,7 @@ fn void test_multi_only_required_flag_uses_defaults() @test {
 fn void test_multi_short_flags_combined_separately() @test {
     String[] args = {"prog", "-n", "World", "-c", "5"};
     MultiCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.name == "World");
     assert(cli.count == 5);
     assert(cli.verbose == false);
@@ -481,28 +516,28 @@ struct EnumDefaultCli @Command({.name = "t"}) {
 fn void test_enum_description() @test {
     String[] args = {"prog", "--log-level", "info"};
     EnumDesCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.log_level == INFO);
 }
 
 fn void test_enum_ordinal() @test {
     String[] args = {"prog", "--log-level", "2"};
     EnumOrdCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.log_level == INFO);
 }
 
 fn void test_enum_lookup() @test {
     String[] args = {"prog", "--log-level", "information"};
     EnumLookupCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.log_level == INFO);
 }
 
 fn void test_enum_default_applied() @test {
     String[] args = {"prog"};
     EnumDefaultCli cli;
-    cli.parse(args)!!;
+    cli.tparse(args)!!;
     assert(cli.log_level == WARN);
 }
 
@@ -510,23 +545,23 @@ fn void test_enum_default_applied() @test {
 
 fn void test_derive_generates_parse_method() @test {
     StringLongCli cli;
-    assert($defined(cli.parse));
+    assert($defined(cli.tparse));
 }
 
 fn void test_derive_parse_propagates_error() @test {
     String[] args = {"prog", "--log-level", "nope"};
     EnumDesCli cli;
-    test::@error(cli.parse(args), seali::INVALID_ENUM_VALUE);
+    test::@error(cli.tparse(args), seali::INVALID_ENUM_VALUE);
 }
 
 fn void test_derive_reparse_same_struct() @test {
     EnumDefaultCli cli;
     String[] first = {"prog", "--log-level", "debug"};
-    cli.parse(first)!!;
+    cli.tparse(first)!!;
     assert(cli.log_level == DEBUG);
 
     String[] second = {"prog", "--log-level", "error"};
-    cli.parse(second)!!;
+    cli.tparse(second)!!;
     assert(cli.log_level == ERROR);
 }
 
@@ -537,97 +572,97 @@ fn void test_derive_reparse_same_struct() @test {
 fn void test_unknown_long_option_returns_fault() @test {
     String[] args = {"prog", "--nope", "x"};
     StringLongCli cli;
-    test::@error(cli.parse(args), seali::UNKNOWN_OPTION);
+    test::@error(cli.tparse(args), seali::UNKNOWN_OPTION);
 }
 
 fn void test_unknown_short_option_returns_fault() @test {
     String[] args = {"prog", "-z"};
     StringLongCli cli;
-    test::@error(cli.parse(args), seali::UNKNOWN_OPTION);
+    test::@error(cli.tparse(args), seali::UNKNOWN_OPTION);
 }
 
 fn void test_unknown_option_with_eq_returns_fault() @test {
     String[] args = {"prog", "--nope=1"};
     StringLongCli cli;
-    test::@error(cli.parse(args), seali::UNKNOWN_OPTION);
+    test::@error(cli.tparse(args), seali::UNKNOWN_OPTION);
 }
 
 fn void test_missing_required_long_returns_fault() @test {
     String[] args = {"prog"};
     StringLongCli cli;
-    test::@error(cli.parse(args), seali::MISSING_REQUIRED_OPTION);
+    test::@error(cli.tparse(args), seali::MISSING_REQUIRED_OPTION);
 }
 
 fn void test_missing_required_positional_returns_fault() @test {
     String[] args = {"prog"};
     PositionalCli cli;
-    test::@error(cli.parse(args), seali::MISSING_REQUIRED_OPTION);
+    test::@error(cli.tparse(args), seali::MISSING_REQUIRED_OPTION);
 }
 
 fn void test_missing_one_of_two_required_returns_fault() @test {
     String[] args = {"prog", "--first", "a"};
     TwoRequiredCli cli;
-    test::@error(cli.parse(args), seali::MISSING_REQUIRED_OPTION);
+    test::@error(cli.tparse(args), seali::MISSING_REQUIRED_OPTION);
 }
 
 fn void test_missing_required_in_subcommand_returns_fault() @test {
     String[] args = {"prog", "install"};
     SubCli cli;
-    test::@error(cli.parse(args), seali::MISSING_REQUIRED_OPTION);
+    test::@error(cli.tparse(args), seali::MISSING_REQUIRED_OPTION);
 }
 
 fn void test_unknown_option_in_subcommand_returns_fault() @test {
     String[] args = {"prog", "fetch", "--nope"};
     SubCli cli;
-    test::@error(cli.parse(args), seali::UNKNOWN_OPTION);
+    test::@error(cli.tparse(args), seali::UNKNOWN_OPTION);
 }
 
 fn void test_help_long_returns_fault() @test {
     String[] args = {"prog", "--help"};
     StringLongCli cli;
-    test::@error(cli.parse(args), seali::HELP_PRINTED);
+    test::@error(cli.tparse(args), seali::HELP_PRINTED);
 }
 
 fn void test_help_short_returns_fault() @test {
     String[] args = {"prog", "-h"};
     StringLongCli cli;
-    test::@error(cli.parse(args), seali::HELP_PRINTED);
+    test::@error(cli.tparse(args), seali::HELP_PRINTED);
 }
 
 fn void test_help_wins_over_missing_required() @test {
     String[] args = {"prog", "--help"};
     TwoRequiredCli cli;
-    test::@error(cli.parse(args), seali::HELP_PRINTED);
+    test::@error(cli.tparse(args), seali::HELP_PRINTED);
 }
 
 fn void test_help_on_empty_returns_fault() @test {
     String[] args = {"prog"};
     HelpOnEmptyCli cli;
-    test::@error(cli.parse(args), seali::HELP_PRINTED);
+    test::@error(cli.tparse(args), seali::HELP_PRINTED);
 }
 
 fn void test_invalid_enum_description_returns_fault() @test {
     String[] args = {"prog", "--log-level", "nope"};
     EnumDesCli cli;
-    test::@error(cli.parse(args), seali::INVALID_ENUM_VALUE);
+    test::@error(cli.tparse(args), seali::INVALID_ENUM_VALUE);
 }
 
 fn void test_non_numeric_enum_ordinal_returns_fault() @test {
     String[] args = {"prog", "--log-level", "nope"};
     EnumOrdCli cli;
-    test::@error(cli.parse(args), string::MALFORMED_INTEGER);
+    test::@error(cli.tparse(args), string::MALFORMED_INTEGER);
 }
 
 fn void test_non_numeric_uint_returns_fault() @test {
     String[] args = {"prog", "--count", "abc"};
     UintCli cli;
-    test::@error(cli.parse(args), string::MALFORMED_INTEGER);
+    test::@error(cli.tparse(args), string::MALFORMED_INTEGER);
 }
 
 fn void test_negative_uint_returns_fault() @test {
     String[] args = {"prog", "--count", "-5"};
     UintCli cli;
-    test::@error(cli.parse(args), string::NEGATIVE_VALUE);
+    test::@error(cli.tparse(args), string::NEGATIVE_VALUE);
 }
 
 fn void test_parse_returns_instead_of_terminating() @test {
@@ -635,7 +670,7 @@ fn void test_parse_returns_instead_of_terminating() @test {
 
     String[] bad = {"prog", "--nope"};
     bool got_fault = false;
-    if (catch f = cli.parse(bad)) {
+    if (catch f = cli.tparse(bad)) {
         got_fault = true;
         assert(f == seali::UNKNOWN_OPTION);
     }
@@ -643,6 +678,98 @@ fn void test_parse_returns_instead_of_terminating() @test {
 
     // execution continues: the same struct still parses afterwards
     String[] good = {"prog", "--name", "Alice"};
-    cli.parse(good)!!;
+    cli.tparse(good)!!;
     assert(cli.name == "Alice");
+}
+
+// ── List{T} members ────────────────────────────────────────────────────────
+
+fn void test_list_single_occurrence() @test {
+    String[] args = {"prog", "--tag", "a"};
+    ListStringCli cli;
+    cli.tparse(args)!!;
+    assert(cli.tag.len() == 1);
+    assert(cli.tag[0] == "a");
+}
+
+fn void test_list_repeated_long_flag_accumulates() @test {
+    String[] args = {"prog", "--tag", "a", "--tag", "b", "--tag", "c"};
+    ListStringCli cli;
+    cli.tparse(args)!!;
+    assert(cli.tag.len() == 3);
+    assert(cli.tag[0] == "a");
+    assert(cli.tag[1] == "b");
+    assert(cli.tag[2] == "c");
+}
+
+fn void test_list_repeated_eq_syntax() @test {
+    String[] args = {"prog", "--tag=a", "--tag=b"};
+    ListStringCli cli;
+    cli.tparse(args)!!;
+    assert(cli.tag.len() == 2);
+    assert(cli.tag[0] == "a");
+    assert(cli.tag[1] == "b");
+}
+
+fn void test_list_repeated_short_flag() @test {
+    String[] args = {"prog", "-t", "a", "-t", "b"};
+    ListStringCli cli;
+    cli.tparse(args)!!;
+    assert(cli.tag.len() == 2);
+    assert(cli.tag[0] == "a");
+    assert(cli.tag[1] == "b");
+}
+
+fn void test_list_repeated_short_flag_attached_value() @test {
+    String[] args = {"prog", "-ta", "-tb"};
+    ListStringCli cli;
+    cli.tparse(args)!!;
+    assert(cli.tag.len() == 2);
+    assert(cli.tag[0] == "a");
+    assert(cli.tag[1] == "b");
+}
+
+fn void test_list_absent_is_empty() @test {
+    String[] args = {"prog"};
+    ListStringCli cli;
+    cli.tparse(args)!!;
+    assert(cli.tag.len() == 0);
+}
+
+fn void test_list_uint_elements_converted() @test {
+    String[] args = {"prog", "--num", "7", "--num", "8"};
+    ListUintCli cli;
+    cli.tparse(args)!!;
+    assert(cli.num.len() == 2);
+    assert(cli.num[0] == 7);
+    assert(cli.num[1] == 8);
+}
+
+fn void test_list_bad_element_returns_fault() @test {
+    String[] args = {"prog", "--num", "abc"};
+    ListUintCli cli;
+    test::@error(cli.tparse(args), string::MALFORMED_INTEGER);
+}
+
+fn void test_list_interleaved_with_other_flags() @test {
+    String[] args = {"prog", "--tag", "a", "--name", "Alice", "--tag", "b", "--verbose"};
+    ListMixedCli cli;
+    cli.tparse(args)!!;
+    assert(cli.tag.len() == 2);
+    assert(cli.tag[0] == "a");
+    assert(cli.tag[1] == "b");
+    assert(cli.name == "Alice");
+    assert(cli.verbose == true);
+}
+
+fn void test_list_does_not_satisfy_other_required_args() @test {
+    String[] args = {"prog", "--tag", "a"};
+    ListMixedCli cli;
+    test::@error(cli.tparse(args), seali::MISSING_REQUIRED_OPTION);
+}
+
+fn void test_list_unknown_option_still_faults() @test {
+    String[] args = {"prog", "--tag", "a", "--nope"};
+    ListStringCli cli;
+    test::@error(cli.tparse(args), seali::UNKNOWN_OPTION);
 }
