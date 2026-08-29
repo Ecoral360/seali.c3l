@@ -445,7 +445,7 @@ macro @has_options_args($Cmd) @private @const {
 macro @print_required_args($Cmd) @private {
   $foreach $member : $Cmd::members :
     ArgConfig $config = @setup_config($Cmd::get_tag("seali:command"), $member);
-    $if $config.default_value.len == 0 &&& !@is_maybe_type($member.type) &&& $member.type != bool:
+    $if $config.default_value.len == 0 &&& !@is_maybe_type($member.type) &&& $member.type != bool &&& !$member.type.is_generic(List):
       var $name = @get_name($config);
       $if $name.len > 0:
         io::print(" " +++ $name);
